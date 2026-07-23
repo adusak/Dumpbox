@@ -253,10 +253,6 @@ func storePart(directory string, part *multipart.Part) (name string, err error) 
 	if name == "" {
 		return "", errors.New("invalid filename")
 	}
-	target, name, err := availablePath(directory, name)
-	if err != nil {
-		return "", err
-	}
 	temp, err := os.CreateTemp(directory, ".upload-*")
 	if err != nil {
 		return "", err
@@ -281,13 +277,17 @@ func storePart(directory string, part *multipart.Part) (name string, err error) 
 	if err = temp.Close(); err != nil {
 		return "", err
 	}
-	if err = os.Rename(tempName, target); err != nil {
+	name, err = publishFile(directory, name, tempName)
+	if err != nil {
+		return "", err
+	}
+	if err = os.Remove(tempName); err != nil {
 		return "", err
 	}
 	return name, nil
 }
 
-func availablePath(directory, name string) (string, string, error) {
+func publishFile(directory, name, tempName string) (string, error) {
 	extension := filepath.Ext(name)
 	stem := strings.TrimSuffix(name, extension)
 	for sequence := 0; sequence < 10_000; sequence++ {
@@ -296,13 +296,13 @@ func availablePath(directory, name string) (string, string, error) {
 			candidate = fmt.Sprintf("%s (%d)%s", stem, sequence, extension)
 		}
 		path := filepath.Join(directory, candidate)
-		if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
-			return path, candidate, nil
-		} else if err != nil {
-			return "", "", err
+		if err := os.Link(tempName, path); err == nil {
+			return candidate, nil
+		} else if !errors.Is(err, os.ErrExist) {
+			return "", err
 		}
 	}
-	return "", "", errors.New("too many files with the same name")
+	return "", errors.New("too many files with the same name")
 }
 
 func safeFilename(name string) string {
@@ -331,15 +331,8 @@ func safeFilename(name string) string {
 }
 
 func userDirectory(user session) string {
-	label := safeFilename(user.Name)
-	if label == "" {
-		label = "user"
-	}
-	if len(label) > 48 {
-		label = label[:48]
-	}
 	sum := sha256Sum(user.Subject)
-	return label + "-" + sum[:16]
+	return "user-" + sum[:24]
 }
 
 func (s *Server) sameOrigin(r *http.Request) bool {

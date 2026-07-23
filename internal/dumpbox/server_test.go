@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -83,6 +84,38 @@ func TestUploadDoesNotOverwriteExistingFile(t *testing.T) {
 	assertFileContent(t, filepath.Join(directory, "notes (1).txt"), "second")
 }
 
+func TestConcurrentUploadsDoNotOverwrite(t *testing.T) {
+	app := testServer(t)
+	var wait sync.WaitGroup
+	responses := make(chan *httptest.ResponseRecorder, 2)
+	for _, content := range []string{"first", "second"} {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			responses <- upload(t, app, "shared.txt", []byte(content))
+		}()
+	}
+	wait.Wait()
+	close(responses)
+	for response := range responses {
+		if response.Code != http.StatusCreated {
+			t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+		}
+	}
+	directory := filepath.Join(app.dataDir, userDirectory(session{Subject: "subject-123", Name: "alice"}))
+	contents := map[string]bool{}
+	for _, name := range []string{"shared.txt", "shared (1).txt"} {
+		content, err := os.ReadFile(filepath.Join(directory, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		contents[string(content)] = true
+	}
+	if !contents["first"] || !contents["second"] {
+		t.Fatalf("stored contents = %v, want both uploads", contents)
+	}
+}
+
 func TestUploadRejectsCrossOriginRequest(t *testing.T) {
 	app := testServer(t)
 	request := httptest.NewRequest(http.MethodPost, "https://dumpbox.example/upload", strings.NewReader("ignored"))
@@ -133,7 +166,7 @@ func testServer(t *testing.T) *Server {
 	}
 }
 
-func authenticatedCookie(t *testing.T, app *Server) string {
+func authenticatedCookie(t testing.TB, app *Server) string {
 	t.Helper()
 	value, err := app.signer.sign(session{
 		Subject: "subject-123",
@@ -146,7 +179,7 @@ func authenticatedCookie(t *testing.T, app *Server) string {
 	return value
 }
 
-func upload(t *testing.T, app *Server, filename string, content []byte) *httptest.ResponseRecorder {
+func upload(t testing.TB, app *Server, filename string, content []byte) *httptest.ResponseRecorder {
 	t.Helper()
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
