@@ -25,6 +25,9 @@ func LoadConfig() (Config, error) {
 		return Config{}, errors.New("BASE_URL must be an absolute http or https URL")
 	}
 	baseURL.Path = strings.TrimRight(baseURL.Path, "/")
+	if baseURL.Path != "" {
+		return Config{}, errors.New("BASE_URL must not contain a path")
+	}
 	baseURL.RawQuery = ""
 	baseURL.Fragment = ""
 
