@@ -105,6 +105,8 @@ pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${template}" \
   --onboot 1 \
   --start 1
 
+pct exec "$CTID" -- passwd --delete root
+
 installation_complete=false
 cleanup() {
   rm -f "${configuration_file:-}"
