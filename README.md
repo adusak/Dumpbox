@@ -46,8 +46,8 @@ request-rate and minimum-transfer-rate limits.
 | `LISTEN_ADDR` | no | `:8080` | HTTP listen address |
 | `DATA_DIR` | no | `./data` | Root upload directory |
 | `OIDC_ALLOW_INSECURE_ISSUER` | no | `false` | Allows a plaintext `http` issuer, and only when its host is loopback |
-| `MAX_REQUEST_BYTES` | no | `5368709120` | Maximum bytes accepted per upload request |
-| `MAX_FILE_BYTES` | no | `5368709120` | Maximum bytes accepted per file |
+| `MAX_REQUEST_BYTES` | no | `5368709120` (5 GiB) | Maximum bytes accepted per upload request |
+| `MAX_FILE_BYTES` | no | `5368709120` (5 GiB) | Maximum bytes accepted per file |
 | `MAX_FILES_PER_REQUEST` | no | `100` | Maximum files accepted per upload request |
 | `MAX_CONCURRENT_UPLOADS_PER_USER` | no | `4` | Concurrent uploads allowed per user |
 | `MAX_CONCURRENT_UPLOADS` | no | `32` | Concurrent uploads allowed across all users |
