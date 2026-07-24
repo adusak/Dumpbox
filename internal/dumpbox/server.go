@@ -392,7 +392,24 @@ func (s *Server) sameOrigin(r *http.Request) bool {
 		return true
 	}
 	parsed, err := url.Parse(origin)
-	return err == nil && parsed.Scheme == s.baseURL.Scheme && parsed.Host == s.baseURL.Host
+	return err == nil &&
+		strings.EqualFold(parsed.Scheme, s.baseURL.Scheme) &&
+		strings.EqualFold(parsed.Hostname(), s.baseURL.Hostname()) &&
+		originPort(parsed) == originPort(s.baseURL)
+}
+
+func originPort(origin *url.URL) string {
+	if port := origin.Port(); port != "" {
+		return port
+	}
+	switch strings.ToLower(origin.Scheme) {
+	case "http":
+		return "80"
+	case "https":
+		return "443"
+	default:
+		return ""
+	}
 }
 
 func (s *Server) securityHeaders(next http.Handler) http.Handler {

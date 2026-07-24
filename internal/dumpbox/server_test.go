@@ -85,6 +85,21 @@ func TestLogoutReturnsToLandingPage(t *testing.T) {
 	}
 }
 
+func TestLogoutAcceptsEquivalentDefaultPortOrigin(t *testing.T) {
+	app := testServer(t)
+	app.baseURL.Host = "dumpbox.example:443"
+	request := httptest.NewRequest(http.MethodPost, "https://dumpbox.example/logout", nil)
+	request.Header.Set("Origin", "https://dumpbox.example")
+	request.AddCookie(&http.Cookie{Name: sessionCookie, Value: authenticatedCookie(t, app)})
+	response := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(response, request)
+
+	if response.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusSeeOther)
+	}
+}
+
 func TestUploadStreamsToUserDirectory(t *testing.T) {
 	app := testServer(t)
 	content := bytes.Repeat([]byte("large enough to copy in chunks\n"), 20_000)
