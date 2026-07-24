@@ -41,7 +41,7 @@ prompt_optional_value() {
   local label="$2"
   local value="${!variable:-}"
 
-  if [[ -z "$value" && -r /dev/tty ]]; then
+  if [[ -z "$value" ]] && { : </dev/tty; } 2>/dev/null; then
     read -r -p "$label: " value </dev/tty
   fi
   [[ "$value" != *$'\n'* && "$value" != *$'\r'* ]] || fail "$variable cannot contain newlines"
