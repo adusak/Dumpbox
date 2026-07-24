@@ -17,18 +17,34 @@ import (
 	"time"
 )
 
-func TestProtectedPageRequiresAuthentication(t *testing.T) {
+func TestLandingPageForUnauthenticatedUser(t *testing.T) {
 	app := testServer(t)
 	request := httptest.NewRequest(http.MethodGet, "https://dumpbox.example/", nil)
 	response := httptest.NewRecorder()
 
 	app.Handler().ServeHTTP(response, request)
 
-	if response.Code != http.StatusFound {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusFound)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
 	}
-	if location := response.Header().Get("Location"); location != "/login" {
-		t.Fatalf("location = %q, want /login", location)
+	if body := response.Body.String(); !strings.Contains(body, `href="login"`) {
+		t.Fatalf("landing page does not contain login link: %s", body)
+	}
+}
+
+func TestAuthenticatedUserSeesUploadPage(t *testing.T) {
+	app := testServer(t)
+	request := httptest.NewRequest(http.MethodGet, "https://dumpbox.example/", nil)
+	request.AddCookie(&http.Cookie{Name: sessionCookie, Value: authenticatedCookie(t, app)})
+	response := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	if body := response.Body.String(); !strings.Contains(body, `id="drop"`) {
+		t.Fatalf("authenticated page does not contain upload area: %s", body)
 	}
 }
 
@@ -42,8 +58,11 @@ func TestTamperedSessionIsRejected(t *testing.T) {
 
 	app.Handler().ServeHTTP(response, request)
 
-	if response.Code != http.StatusFound {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusFound)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	if body := response.Body.String(); !strings.Contains(body, `href="login"`) {
+		t.Fatalf("invalid session did not show landing page: %s", body)
 	}
 }
 
@@ -155,12 +174,17 @@ func testServer(t *testing.T) *Server {
 	if err != nil {
 		t.Fatal(err)
 	}
+	landingPage, err := template.New("landing").Parse(landingHTML)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return &Server{
 		baseURL:      baseURL,
 		dataDir:      t.TempDir(),
 		signer:       signer{key: bytes.Repeat([]byte{42}, 32)},
 		secureCookie: true,
 		page:         page,
+		landingPage:  landingPage,
 		logger:       slog.New(slog.NewTextHandler(io.Discard, nil)),
 		now:          time.Now,
 	}

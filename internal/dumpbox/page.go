@@ -1,5 +1,41 @@
 package dumpbox
 
+const landingHTML = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dumpbox</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; color: #f8fafc; background: #09090b; overflow-x: hidden; }
+    body::before { content: ""; position: fixed; inset: -30%; z-index: -1; background: radial-gradient(circle at 30% 30%, #6d28d966, transparent 25%), radial-gradient(circle at 70% 65%, #0891b244, transparent 25%); filter: blur(70px); }
+    header { padding: 24px clamp(24px, 5vw, 72px); }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 800; letter-spacing: -.03em; font-size: 20px; }
+    .mark { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 12px; background: linear-gradient(135deg, #8b5cf6, #06b6d4); box-shadow: 0 12px 30px #7c3aed55; }
+    main { display: grid; place-items: center; width: min(760px, calc(100% - 40px)); min-height: calc(100vh - 108px); margin: 0 auto; padding-bottom: 80px; text-align: center; }
+    .card { width: 100%; padding: clamp(48px, 9vw, 88px) 24px; border: 1px solid #ffffff20; border-radius: 28px; background: #18181b99; backdrop-filter: blur(24px); box-shadow: 0 30px 80px #0008; }
+    h1 { margin: 0; font-size: clamp(40px, 8vw, 74px); letter-spacing: -.06em; line-height: .98; }
+    p { max-width: 500px; margin: 22px auto 36px; color: #a1a1aa; font-size: clamp(16px, 2vw, 19px); line-height: 1.6; }
+    .login { display: inline-block; padding: 14px 24px; border-radius: 12px; color: #fff; background: linear-gradient(135deg, #7c3aed, #0891b2); box-shadow: 0 16px 40px #7c3aed55; font-weight: 700; text-decoration: none; }
+    .login:hover { filter: brightness(1.1); }
+    .login:focus-visible { outline: 3px solid #a78bfa; outline-offset: 4px; }
+    @media (max-width: 560px) { header { padding: 20px; } main { min-height: calc(100vh - 96px); } }
+  </style>
+</head>
+<body>
+  <header><div class="brand"><div class="mark">D</div>Dumpbox</div></header>
+  <main>
+    <section class="card">
+      <h1>Your files.<br>Your space.</h1>
+      <p>Sign in securely to upload files directly to your private folder.</p>
+      <a class="login" href="login">Sign in</a>
+    </section>
+  </main>
+</body>
+</html>`
+
 const indexHTML = `<!doctype html>
 <html lang="en">
 <head>
