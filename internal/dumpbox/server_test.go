@@ -51,7 +51,9 @@ func TestAuthenticatedUserSeesUploadPage(t *testing.T) {
 func TestTamperedSessionIsRejected(t *testing.T) {
 	app := testServer(t)
 	value := authenticatedCookie(t, app)
-	value = value[:len(value)-1] + "x"
+	parts := strings.Split(value, ".")
+	parts[1] = "x" + parts[1][1:]
+	value = strings.Join(parts, ".")
 	request := httptest.NewRequest(http.MethodGet, "https://dumpbox.example/", nil)
 	request.AddCookie(&http.Cookie{Name: sessionCookie, Value: value})
 	response := httptest.NewRecorder()
@@ -91,7 +93,7 @@ func TestUploadStreamsToUserDirectory(t *testing.T) {
 	if response.Code != http.StatusCreated {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 	}
-	directory := filepath.Join(app.dataDir, userDirectory(session{Subject: "subject-123", Name: "alice"}))
+	directory := filepath.Join(app.dataDir, userDirectory(session{Subject: "subject-123", Username: "alice"}))
 	stored, err := os.ReadFile(filepath.Join(directory, "report.txt"))
 	if err != nil {
 		t.Fatal(err)
@@ -115,7 +117,7 @@ func TestUploadDoesNotOverwriteExistingFile(t *testing.T) {
 	if first.Code != http.StatusCreated || second.Code != http.StatusCreated {
 		t.Fatalf("statuses = %d, %d", first.Code, second.Code)
 	}
-	directory := filepath.Join(app.dataDir, userDirectory(session{Subject: "subject-123", Name: "alice"}))
+	directory := filepath.Join(app.dataDir, userDirectory(session{Subject: "subject-123", Username: "alice"}))
 	assertFileContent(t, filepath.Join(directory, "notes.txt"), "first")
 	assertFileContent(t, filepath.Join(directory, "notes (1).txt"), "second")
 }
@@ -138,7 +140,7 @@ func TestConcurrentUploadsDoNotOverwrite(t *testing.T) {
 			t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 		}
 	}
-	directory := filepath.Join(app.dataDir, userDirectory(session{Subject: "subject-123", Name: "alice"}))
+	directory := filepath.Join(app.dataDir, userDirectory(session{Subject: "subject-123", Username: "alice"}))
 	contents := map[string]bool{}
 	for _, name := range []string{"shared.txt", "shared (1).txt"} {
 		content, err := os.ReadFile(filepath.Join(directory, name))
@@ -164,6 +166,27 @@ func TestUploadRejectsCrossOriginRequest(t *testing.T) {
 
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusForbidden)
+	}
+}
+
+func TestUserDirectoryIncludesSanitizedUsername(t *testing.T) {
+	hash := sha256Sum("subject-123")[:24]
+	tests := []struct {
+		name     string
+		username string
+		want     string
+	}{
+		{name: "preferred username", username: "alice", want: "user-alice-" + hash},
+		{name: "unsafe characters", username: "../../Alice Smith/😈", want: "user-Alice_Smith-" + hash},
+		{name: "missing username", want: "user-" + hash},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := userDirectory(session{Subject: "subject-123", Username: test.username})
+			if got != test.want {
+				t.Fatalf("userDirectory() = %q, want %q", got, test.want)
+			}
+		})
 	}
 }
 
@@ -210,9 +233,10 @@ func testServer(t *testing.T) *Server {
 func authenticatedCookie(t testing.TB, app *Server) string {
 	t.Helper()
 	value, err := app.signer.sign(session{
-		Subject: "subject-123",
-		Name:    "alice",
-		Expires: time.Now().Add(time.Hour).Unix(),
+		Subject:  "subject-123",
+		Name:     "alice",
+		Username: "alice",
+		Expires:  time.Now().Add(time.Hour).Unix(),
 	})
 	if err != nil {
 		t.Fatal(err)

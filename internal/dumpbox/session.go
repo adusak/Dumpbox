@@ -11,9 +11,10 @@ import (
 )
 
 type session struct {
-	Subject string `json:"sub"`
-	Name    string `json:"name"`
-	Expires int64  `json:"exp"`
+	Subject  string `json:"sub"`
+	Name     string `json:"name"`
+	Username string `json:"username,omitempty"`
+	Expires  int64  `json:"exp"`
 }
 
 type authRequest struct {
