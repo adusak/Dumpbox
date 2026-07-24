@@ -83,6 +83,8 @@ func NewServer(config Config, provider *oidc.Provider, logger *slog.Logger) (*Se
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.health)
+	mux.HandleFunc("GET /favicon.svg", brandAsset("favicon.svg"))
+	mux.HandleFunc("GET /assets/logo.svg", brandAsset("logo.svg"))
 	mux.HandleFunc("GET /login", s.login)
 	mux.HandleFunc("GET /auth/callback", s.callback)
 	mux.HandleFunc("POST /logout", s.logout)

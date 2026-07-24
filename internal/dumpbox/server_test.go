@@ -219,6 +219,42 @@ func TestSignerRejectsModifiedPayload(t *testing.T) {
 	}
 }
 
+func TestBrandAssetsAreServed(t *testing.T) {
+	app := testServer(t)
+	for _, path := range []string{"/favicon.svg", "/assets/logo.svg"} {
+		request := httptest.NewRequest(http.MethodGet, "https://dumpbox.example"+path, nil)
+		response := httptest.NewRecorder()
+
+		app.Handler().ServeHTTP(response, request)
+
+		if response.Code != http.StatusOK {
+			t.Fatalf("%s status = %d, want %d", path, response.Code, http.StatusOK)
+		}
+		if contentType := response.Header().Get("Content-Type"); contentType != "image/svg+xml" {
+			t.Fatalf("%s content-type = %q, want image/svg+xml", path, contentType)
+		}
+		if body := response.Body.String(); !strings.Contains(body, "<svg") {
+			t.Fatalf("%s did not return SVG markup", path)
+		}
+	}
+}
+
+func TestLandingPageReferencesBrandAssets(t *testing.T) {
+	app := testServer(t)
+	request := httptest.NewRequest(http.MethodGet, "https://dumpbox.example/", nil)
+	response := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(response, request)
+
+	body := response.Body.String()
+	if !strings.Contains(body, `href="/favicon.svg"`) {
+		t.Fatalf("landing page does not link the favicon: %s", body)
+	}
+	if !strings.Contains(body, `src="/assets/logo.svg"`) {
+		t.Fatalf("landing page does not use the logo: %s", body)
+	}
+}
+
 func testServer(t *testing.T) *Server {
 	t.Helper()
 	baseURL, err := url.Parse("https://dumpbox.example")
