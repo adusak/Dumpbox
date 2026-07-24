@@ -63,10 +63,10 @@ The health endpoint is available at `GET /healthz`.
 
 ## Install in a Proxmox LXC
 
-The installer creates a passwordless, unprivileged Debian LXC, installs the
-latest verified Dumpbox release, configures a dedicated system user and
-hardened systemd unit, and starts the service. Run this command as `root` in the
-Proxmox VE shell:
+The installer creates a passwordless, unprivileged Debian LXC with automatic
+root login on its Proxmox console, installs the latest verified Dumpbox release,
+configures a dedicated system user and hardened systemd unit, and starts the
+service. Run this command as `root` in the Proxmox VE shell:
 
 ```sh
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/adusak/Dumpbox/main/scripts/proxmox-lxc.sh)"

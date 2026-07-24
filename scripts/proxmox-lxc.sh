@@ -106,6 +106,18 @@ pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${template}" \
   --start 1
 
 pct exec "$CTID" -- passwd --delete root
+pct exec "$CTID" -- bash -c '
+  set -Eeuo pipefail
+  override=/etc/systemd/system/container-getty@1.service.d/override.conf
+  mkdir -p "${override%/*}"
+  cat >"$override" <<EOF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear --keep-baud - 115200,38400,9600 \$TERM
+EOF
+  systemctl daemon-reload
+  systemctl restart container-getty@1.service
+'
 
 installation_complete=false
 cleanup() {
