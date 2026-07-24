@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="620" height="176" viewBox="0 0 620 176" role="img" aria-labelledby="title desc">
+  <title id="title">Dumpbox logo</title>
+  <desc id="desc">A postage-stamp badge holding an open cardboard box with a smiling poop rising out of it, beside the uppercase Dumpbox wordmark and a Special Delivery tagline.</desc>
+  <defs>
+    <linearGradient id="board" x1="34" y1="84" x2="94" y2="140" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E6A65C"/>
+      <stop offset="1" stop-color="#C67F32"/>
+    </linearGradient>
+    <linearGradient id="flap" x1="34" y1="60" x2="94" y2="86" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F3C079"/>
+      <stop offset="1" stop-color="#E1A052"/>
+    </linearGradient>
+    <linearGradient id="poo" x1="46" y1="34" x2="86" y2="82" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7A5236"/>
+      <stop offset="1" stop-color="#553522"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(20 20)">
+    <!-- stamp badge -->
+    <rect x="0" y="0" width="136" height="136" rx="24" fill="#F4EFE1" stroke="#1F3A2E" stroke-width="5"/>
+    <rect x="9" y="9" width="118" height="118" rx="16" fill="none" stroke="#1F3A2E" stroke-width="2.4" stroke-dasharray="0.5 7" stroke-linecap="round" opacity=".55"/>
+
+    <!-- postmark -->
+    <g transform="translate(104 28)" fill="none" stroke="#1F3A2E" stroke-width="2" opacity=".7">
+      <circle r="15"/>
+      <circle r="9.5" stroke-dasharray="2 3.4"/>
+      <path d="M0 -4l1.2 2.5 2.8.3-2 2 .5 2.8L0 4.3l-2.5 1.3.5-2.8-2-2 2.8-.3z" fill="#1F3A2E" stroke="none"/>
+    </g>
+
+    <!-- box front -->
+    <path d="M34 84h60v30a4 4 0 0 1-4 4H38a4 4 0 0 1-4-4z" fill="url(#board)" stroke="#1F3A2E" stroke-width="4" stroke-linejoin="round"/>
+    <!-- packing tape -->
+    <rect x="59" y="84" width="10" height="34" fill="#F4EFE1" opacity=".85" stroke="#1F3A2E" stroke-width="1.4"/>
+
+    <!-- poop rising from the box -->
+    <g stroke="#1F3A2E" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M50 82C39 82 35 70 46 63 39 55 44 45 54 46 49 37 58 30 66 35 72 30 83 34 80 44 91 45 95 57 85 63 94 69 88 82 77 82Z" fill="url(#poo)"/>
+    </g>
+    <!-- freshness marks -->
+    <g fill="none" stroke="#1F3A2E" stroke-width="2.4" stroke-linecap="round" opacity=".6">
+      <path d="M58 25c-2-3 2-5 0-8"/>
+      <path d="M66 21c-2-3 2-5 0-8"/>
+      <path d="M74 25c-2-3 2-5 0-8"/>
+    </g>
+    <!-- face -->
+    <circle cx="56" cy="55" r="3.4" fill="#F4EFE1"/>
+    <circle cx="72" cy="55" r="3.4" fill="#F4EFE1"/>
+    <circle cx="56.7" cy="55.6" r="1.5" fill="#1F3A2E"/>
+    <circle cx="72.7" cy="55.6" r="1.5" fill="#1F3A2E"/>
+    <path d="M55 65c5 5 12 5 17 0" fill="none" stroke="#F4EFE1" stroke-width="3.6" stroke-linecap="round"/>
+
+    <!-- open flaps in front of the poop base -->
+    <path d="M34 84 22 71l24-7 12 15z" fill="url(#flap)" stroke="#1F3A2E" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M94 84l12-13-24-7-12 15z" fill="url(#flap)" stroke="#1F3A2E" stroke-width="4" stroke-linejoin="round"/>
+  </g>
+
+  <!-- wordmark -->
+  <text x="186" y="98" fill="#1F3A2E" font-family="'Arial Black', 'Arial Bold', Inter, ui-sans-serif, system-ui, sans-serif" font-size="60" font-weight="900" letter-spacing="-1.5">DUMPBOX</text>
+  <g transform="translate(188 118)">
+    <path d="M0 6h20" stroke="#C67F32" stroke-width="3" stroke-linecap="round"/>
+    <text x="28" y="11" fill="#5C7A68" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" letter-spacing="5.5">SPECIAL DELIVERY</text>
+    <path d="M250 6h20" stroke="#C67F32" stroke-width="3" stroke-linecap="round"/>
+  </g>
+</svg>
