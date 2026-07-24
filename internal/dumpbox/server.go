@@ -36,6 +36,8 @@ type tokenVerifier interface {
 type Server struct {
 	baseURL      *url.URL
 	dataDir      string
+	limits       uploadLimits
+	uploadSlots  *uploadSlots
 	oauth        oauth2.Config
 	verifier     tokenVerifier
 	signer       signer
@@ -63,6 +65,12 @@ func NewServer(config Config, provider *oidc.Provider, logger *slog.Logger) (*Se
 	return &Server{
 		baseURL: config.BaseURL,
 		dataDir: config.DataDir,
+		limits: uploadLimits{
+			requestBytes:    config.MaxRequestBytes,
+			fileBytes:       config.MaxFileBytes,
+			filesPerRequest: config.MaxFilesPerRequest,
+		},
+		uploadSlots: newUploadSlots(config.MaxUploadsPerUser, config.MaxUploadsTotal),
 		oauth: oauth2.Config{
 			ClientID:     config.ClientID,
 			ClientSecret: config.ClientSecret,
@@ -238,12 +246,22 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "Invalid request origin."})
 		return
 	}
+	user := r.Context().Value(identityKey{}).(session)
+	if !s.uploadSlots.acquire(user.Subject) {
+		w.Header().Set("Retry-After", "30")
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "Too many uploads are in progress. Try again shortly."})
+		return
+	}
+	defer s.uploadSlots.release(user.Subject)
+
+	if s.limits.requestBytes > 0 {
+		r.Body = http.MaxBytesReader(w, r.Body, s.limits.requestBytes)
+	}
 	reader, err := r.MultipartReader()
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Expected a multipart upload."})
 		return
 	}
-	user := r.Context().Value(identityKey{}).(session)
 	directory := filepath.Join(s.dataDir, userDirectory(user))
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		s.internalError(w, r, fmt.Errorf("create user directory: %w", err))
@@ -257,6 +275,10 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		if err != nil {
+			if isRequestTooLarge(err) {
+				writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "The upload is larger than the configured limit."})
+				return
+			}
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Could not read the upload."})
 			return
 		}
@@ -264,8 +286,17 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 			_ = part.Close()
 			continue
 		}
-		name, err := storePart(directory, part)
+		if s.limits.filesPerRequest > 0 && len(uploaded) >= s.limits.filesPerRequest {
+			_ = part.Close()
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "Too many files in one upload."})
+			return
+		}
+		name, err := storePart(directory, part, s.limits.fileBytes)
 		_ = part.Close()
+		if errors.Is(err, errTooLarge) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "The upload is larger than the configured limit."})
+			return
+		}
 		if err != nil {
 			s.logger.Error("store upload", "subject", user.Subject, "error", err)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Could not store the file."})
@@ -280,7 +311,14 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"files": uploaded})
 }
 
-func storePart(directory string, part *multipart.Part) (name string, err error) {
+var errTooLarge = errors.New("upload exceeds the configured limit")
+
+func isRequestTooLarge(err error) bool {
+	var maxBytes *http.MaxBytesError
+	return errors.As(err, &maxBytes)
+}
+
+func storePart(directory string, part *multipart.Part, maxFileBytes int64) (name string, err error) {
 	name = safeFilename(part.FileName())
 	if name == "" {
 		return "", errors.New("invalid filename")
@@ -300,8 +338,19 @@ func storePart(directory string, part *multipart.Part) (name string, err error) 
 		return "", err
 	}
 	buffer := make([]byte, 256*1024)
-	if _, err = io.CopyBuffer(temp, part, buffer); err != nil {
+	var source io.Reader = part
+	if maxFileBytes > 0 {
+		source = io.LimitReader(part, maxFileBytes+1)
+	}
+	written, err := io.CopyBuffer(temp, source, buffer)
+	if err != nil {
+		if isRequestTooLarge(err) {
+			return "", errTooLarge
+		}
 		return "", err
+	}
+	if maxFileBytes > 0 && written > maxFileBytes {
+		return "", errTooLarge
 	}
 	if err = temp.Sync(); err != nil {
 		return "", err
@@ -422,6 +471,9 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		if s.baseURL.Scheme == "https" {
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000")
+		}
 		next.ServeHTTP(w, r)
 	})
 }
