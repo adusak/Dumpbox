@@ -56,7 +56,7 @@ const indexHTML = `<!doctype html>
     main { width: min(760px, calc(100% - 40px)); margin: clamp(40px, 8vh, 96px) auto; text-align: center; }
     h1 { margin: 0; font-size: clamp(40px, 8vw, 74px); letter-spacing: -.06em; line-height: .98; }
     .lead { color: #a1a1aa; font-size: clamp(16px, 2vw, 19px); margin: 22px auto 40px; max-width: 520px; line-height: 1.6; }
-    .drop { position: relative; padding: clamp(44px, 8vw, 76px) 24px; border: 1px solid #ffffff20; border-radius: 28px; background: #18181b99; backdrop-filter: blur(24px); box-shadow: 0 30px 80px #0008; transition: .2s ease; cursor: pointer; }
+    .drop { display: block; position: relative; padding: clamp(44px, 8vw, 76px) 24px; border: 1px solid #ffffff20; border-radius: 28px; background: #18181b99; backdrop-filter: blur(24px); box-shadow: 0 30px 80px #0008; transition: .2s ease; cursor: pointer; }
     .drop::after { content: ""; position: absolute; inset: 8px; pointer-events: none; border: 1px dashed #ffffff24; border-radius: 21px; }
     .drop.dragging { border-color: #a78bfa; transform: scale(1.01); background: #27203acc; }
     .icon { width: 64px; height: 64px; margin: 0 auto 20px; display: grid; place-items: center; border-radius: 20px; background: linear-gradient(135deg, #7c3aed, #0891b2); font-size: 30px; box-shadow: 0 16px 40px #7c3aed55; }
