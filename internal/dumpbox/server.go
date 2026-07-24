@@ -39,6 +39,7 @@ type Server struct {
 	signer       signer
 	secureCookie bool
 	page         *template.Template
+	landingPage  *template.Template
 	logger       *slog.Logger
 	now          func() time.Time
 }
@@ -49,6 +50,10 @@ func NewServer(config Config, provider *oidc.Provider, logger *slog.Logger) (*Se
 	page, err := template.New("index").Parse(indexHTML)
 	if err != nil {
 		return nil, fmt.Errorf("parse page template: %w", err)
+	}
+	landingPage, err := template.New("landing").Parse(landingHTML)
+	if err != nil {
+		return nil, fmt.Errorf("parse landing page template: %w", err)
 	}
 	if logger == nil {
 		logger = slog.Default()
@@ -67,6 +72,7 @@ func NewServer(config Config, provider *oidc.Provider, logger *slog.Logger) (*Se
 		signer:       signer{key: config.SessionKey},
 		secureCookie: config.BaseURL.Scheme == "https",
 		page:         page,
+		landingPage:  landingPage,
 		logger:       logger,
 		now:          time.Now,
 	}, nil
@@ -78,7 +84,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /login", s.login)
 	mux.HandleFunc("GET /auth/callback", s.callback)
 	mux.HandleFunc("POST /logout", s.logout)
-	mux.Handle("GET /", s.requireAuth(http.HandlerFunc(s.index)))
+	mux.HandleFunc("GET /", s.home)
 	mux.Handle("POST /upload", s.requireAuth(http.HandlerFunc(s.upload)))
 	return s.securityHeaders(mux)
 }
@@ -173,7 +179,24 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.clearCookie(w, sessionCookie)
-	http.Redirect(w, r, s.baseURL.Path+"/login", http.StatusSeeOther)
+	http.Redirect(w, r, s.baseURL.Path+"/", http.StatusSeeOther)
+}
+
+func (s *Server) home(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie(sessionCookie)
+	if err == nil {
+		var user session
+		if s.signer.verify(cookie.Value, &user) == nil && user.valid(s.now()) {
+			s.index(w, r.WithContext(context.WithValue(r.Context(), identityKey{}, user)))
+			return
+		}
+		s.clearCookie(w, sessionCookie)
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.landingPage.Execute(w, nil); err != nil {
+		s.logger.Error("render landing page", "error", err)
+	}
 }
 
 func (s *Server) index(w http.ResponseWriter, r *http.Request) {
