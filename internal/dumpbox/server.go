@@ -17,6 +17,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
@@ -163,7 +165,12 @@ func (s *Server) callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := firstNonempty(claims.PreferredUsername, claims.Name, claims.Email, claims.Subject)
-	userSession := session{Subject: claims.Subject, Name: name, Expires: s.now().Add(12 * time.Hour).Unix()}
+	userSession := session{
+		Subject:  claims.Subject,
+		Name:     name,
+		Username: claims.PreferredUsername,
+		Expires:  s.now().Add(12 * time.Hour).Unix(),
+	}
 	value, err := s.signer.sign(userSession)
 	if err != nil {
 		s.internalError(w, r, err)
@@ -355,7 +362,26 @@ func safeFilename(name string) string {
 
 func userDirectory(user session) string {
 	sum := sha256Sum(user.Subject)
-	return "user-" + sum[:24]
+	username := safeDirectoryComponent(user.Username)
+	if username == "" {
+		return "user-" + sum[:24]
+	}
+	return "user-" + username + "-" + sum[:24]
+}
+
+func safeDirectoryComponent(value string) string {
+	const maxBytes = 100
+	var component strings.Builder
+	for _, r := range strings.TrimSpace(value) {
+		if !unicode.IsLetter(r) && !unicode.IsNumber(r) && !strings.ContainsRune("-_.@", r) {
+			r = '_'
+		}
+		if component.Len()+utf8.RuneLen(r) > maxBytes {
+			break
+		}
+		component.WriteRune(r)
+	}
+	return strings.Trim(component.String(), "._-")
 }
 
 func (s *Server) sameOrigin(r *http.Request) bool {

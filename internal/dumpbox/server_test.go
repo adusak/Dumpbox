@@ -167,6 +167,27 @@ func TestUploadRejectsCrossOriginRequest(t *testing.T) {
 	}
 }
 
+func TestUserDirectoryIncludesSanitizedUsername(t *testing.T) {
+	hash := sha256Sum("subject-123")[:24]
+	tests := []struct {
+		name     string
+		username string
+		want     string
+	}{
+		{name: "preferred username", username: "alice", want: "user-alice-" + hash},
+		{name: "unsafe characters", username: "../../Alice Smith/😈", want: "user-Alice_Smith__-" + hash},
+		{name: "missing username", want: "user-" + hash},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := userDirectory(session{Subject: "subject-123", Username: test.username})
+			if got != test.want {
+				t.Fatalf("userDirectory() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func TestSignerRejectsModifiedPayload(t *testing.T) {
 	s := signer{key: bytes.Repeat([]byte{7}, 32)}
 	value, err := s.sign(session{Subject: "alice", Name: "Alice", Expires: time.Now().Add(time.Hour).Unix()})
@@ -210,9 +231,10 @@ func testServer(t *testing.T) *Server {
 func authenticatedCookie(t testing.TB, app *Server) string {
 	t.Helper()
 	value, err := app.signer.sign(session{
-		Subject: "subject-123",
-		Name:    "alice",
-		Expires: time.Now().Add(time.Hour).Unix(),
+		Subject:  "subject-123",
+		Name:     "alice",
+		Username: "alice",
+		Expires:  time.Now().Add(time.Hour).Unix(),
 	})
 	if err != nil {
 		t.Fatal(err)

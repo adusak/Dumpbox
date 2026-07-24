@@ -44,10 +44,11 @@ the application starts.
 | `LISTEN_ADDR` | no | `:8080` | HTTP listen address |
 | `DATA_DIR` | no | `./data` | Root upload directory |
 
-The OIDC scopes are `openid profile email`. A hash of the immutable OIDC `sub`
-claim forms the stable user folder name. Files are written with `0600`
-permissions, user folders with `0700`, and duplicate filenames receive a numeric
-suffix instead of overwriting existing data.
+The OIDC scopes are `openid profile email`. User folder names include a sanitized
+`preferred_username` followed by a hash of the immutable OIDC `sub` claim. If
+`preferred_username` is unavailable, only the hash is used. Files are written
+with `0600` permissions, user folders with `0700`, and duplicate filenames
+receive a numeric suffix instead of overwriting existing data.
 
 ## Build and test
 
