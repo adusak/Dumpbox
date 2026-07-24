@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="160" viewBox="0 0 600 160" role="img" aria-labelledby="title desc">
+  <title id="title">Dumpbox minimal logo</title>
+  <desc id="desc">A minimal coral poop swirl nested in an open navy box beside the Dumpbox name.</desc>
+  <defs>
+    <linearGradient id="coral" x1="50" y1="27" x2="103" y2="91" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF8B72"/>
+      <stop offset="1" stop-color="#FF526F"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(12 11)">
+    <circle cx="69" cy="69" r="68" fill="#EEF4FF"/>
+    <path d="M34 76h70l-8 43H42z" fill="#173B67"/>
+    <path d="M34 76L18 91l28 9 23-24zm70 0 16 15-28 9-23-24z" fill="#2F67A5" stroke="#173B67" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M45 73c-4-9 1-19 12-21-4-8 2-17 12-18-1-10 9-17 18-12 7 4 7 13 3 19 12-1 19 11 14 21 8 3 11 11 7 18H40c-2-4 0-7 5-7z" fill="url(#coral)"/>
+    <path d="M66 58h1m19 0h1" stroke="#173B67" stroke-width="6" stroke-linecap="round"/>
+    <path d="M66 68c6 5 13 5 20 0" fill="none" stroke="#173B67" stroke-width="4" stroke-linecap="round"/>
+  </g>
+  <text x="176" y="101" fill="#173B67" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="72" font-weight="750" letter-spacing="-4">dumpbox</text>
+  <path d="M176 116h55" stroke="#FF6474" stroke-width="7" stroke-linecap="round"/>
+</svg>

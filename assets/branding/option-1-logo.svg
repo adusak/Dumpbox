@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="160" viewBox="0 0 600 160" role="img" aria-labelledby="title desc">
+  <title id="title">Dumpbox playful logo</title>
+  <desc id="desc">A smiling poop character popping out of a cardboard box beside the Dumpbox name.</desc>
+  <defs>
+    <linearGradient id="tile" x1="20" y1="12" x2="140" y2="148" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#06B6D4"/>
+    </linearGradient>
+    <linearGradient id="box" x1="50" y1="84" x2="112" y2="138" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8C46A"/>
+      <stop offset="1" stop-color="#D98A36"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="144" height="144" rx="38" fill="url(#tile)"/>
+  <path d="M59 86c-7-10-4-21 7-26-4-9 2-19 12-20-1-11 10-19 20-13 6 3 7 10 5 16 12-1 20 12 14 22 11 7 10 22 1 29H61c-3-2-5-5-6-8z" fill="#623B2A"/>
+  <ellipse cx="78" cy="67" rx="5" ry="6" fill="#fff"/>
+  <ellipse cx="99" cy="67" rx="5" ry="6" fill="#fff"/>
+  <circle cx="79" cy="68" r="2.3" fill="#18181B"/>
+  <circle cx="100" cy="68" r="2.3" fill="#18181B"/>
+  <path d="M79 79c6 6 13 6 19 0" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+  <path d="M50 88h76l-12 51H62z" fill="url(#box)"/>
+  <path d="M50 88l-15 15 31 8 14-23zm76 0 15 15-31 8-14-23z" fill="#FFD98F" stroke="#D98A36" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M88 91v46" stroke="#B96B27" stroke-width="3" stroke-dasharray="5 5"/>
+  <path d="M57 91h62" stroke="#B96B27" stroke-width="3" opacity=".55"/>
+  <text x="178" y="102" fill="#18181B" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="70" font-weight="800" letter-spacing="-4">Dumpbox</text>
+  <circle cx="554" cy="91" r="7" fill="#8B5CF6"/>
+</svg>
