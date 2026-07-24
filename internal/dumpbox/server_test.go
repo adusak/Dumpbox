@@ -300,8 +300,14 @@ func testServer(t *testing.T) *Server {
 		t.Fatal(err)
 	}
 	return &Server{
-		baseURL:      baseURL,
-		dataDir:      t.TempDir(),
+		baseURL: baseURL,
+		dataDir: t.TempDir(),
+		limits: uploadLimits{
+			requestBytes:    defaultMaxRequestBytes,
+			fileBytes:       defaultMaxFileBytes,
+			filesPerRequest: defaultMaxFilesPerRequest,
+		},
+		uploadSlots:  newUploadSlots(defaultUploadsPerSubject, defaultUploadsTotal),
 		signer:       signer{key: bytes.Repeat([]byte{42}, 32)},
 		secureCookie: true,
 		page:         page,
@@ -358,5 +364,109 @@ func assertFileContent(t *testing.T, path, expected string) {
 	}
 	if string(content) != expected {
 		t.Fatalf("content = %q, want %q", content, expected)
+	}
+}
+
+func TestUploadRejectsFileLargerThanLimit(t *testing.T) {
+	app := testServer(t)
+	app.limits.fileBytes = 8
+
+	response := upload(t, app, "big.bin", bytes.Repeat([]byte("a"), 64))
+
+	if response.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusRequestEntityTooLarge)
+	}
+	directory := filepath.Join(app.dataDir, userDirectory(session{Subject: "subject-123", Username: "alice"}))
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("directory entries = %d, want no stored or partial file", len(entries))
+	}
+}
+
+func TestUploadRejectsRequestLargerThanLimit(t *testing.T) {
+	app := testServer(t)
+	app.limits.requestBytes = 16
+
+	response := upload(t, app, "big.bin", bytes.Repeat([]byte("a"), 1024))
+
+	if response.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusRequestEntityTooLarge)
+	}
+}
+
+func TestUploadRejectsTooManyConcurrentUploads(t *testing.T) {
+	app := testServer(t)
+	app.uploadSlots = newUploadSlots(1, 1)
+	if !app.uploadSlots.acquire("subject-123") {
+		t.Fatal("could not acquire the first upload slot")
+	}
+
+	response := upload(t, app, "notes.txt", []byte("blocked"))
+
+	if response.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusTooManyRequests)
+	}
+	app.uploadSlots.release("subject-123")
+	if response := upload(t, app, "notes.txt", []byte("allowed")); response.Code != http.StatusCreated {
+		t.Fatalf("status after release = %d, want %d", response.Code, http.StatusCreated)
+	}
+}
+
+func TestHSTSIsSentForHTTPSBaseURL(t *testing.T) {
+	app := testServer(t)
+	request := httptest.NewRequest(http.MethodGet, "https://dumpbox.example/", nil)
+	response := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(response, request)
+
+	if header := response.Header().Get("Strict-Transport-Security"); header != "max-age=31536000" {
+		t.Fatalf("Strict-Transport-Security = %q", header)
+	}
+}
+
+func TestHSTSIsOmittedForHTTPBaseURL(t *testing.T) {
+	app := testServer(t)
+	baseURL, err := url.Parse("http://localhost:8080")
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.baseURL = baseURL
+	request := httptest.NewRequest(http.MethodGet, "http://localhost:8080/", nil)
+	response := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(response, request)
+
+	if header := response.Header().Get("Strict-Transport-Security"); header != "" {
+		t.Fatalf("Strict-Transport-Security = %q, want empty", header)
+	}
+}
+
+func TestValidateIssuer(t *testing.T) {
+	cases := []struct {
+		issuer        string
+		allowInsecure bool
+		valid         bool
+	}{
+		{issuer: "https://identity.example", valid: true},
+		{issuer: "https://identity.example/realms/main", valid: true},
+		{issuer: "http://identity.example", valid: false},
+		{issuer: "http://identity.example", allowInsecure: true, valid: false},
+		{issuer: "http://localhost:8080", allowInsecure: true, valid: true},
+		{issuer: "http://127.0.0.1:8080", allowInsecure: true, valid: true},
+		{issuer: "http://localhost:8080", valid: false},
+		{issuer: "https://" + "user:token" + "@identity.example", valid: false},
+		{issuer: "https://identity.example?x=1", valid: false},
+		{issuer: "https://identity.example#fragment", valid: false},
+		{issuer: "identity.example", valid: false},
+		{issuer: "ftp://identity.example", valid: false},
+	}
+	for _, test := range cases {
+		err := validateIssuer(test.issuer, test.allowInsecure)
+		if (err == nil) != test.valid {
+			t.Errorf("validateIssuer(%q, %t) error = %v, want valid = %t", test.issuer, test.allowInsecure, err, test.valid)
+		}
 	}
 }

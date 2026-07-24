@@ -30,7 +30,9 @@ docker compose up -d --build
 
 Terminate TLS at a reverse proxy and forward requests to port 8080. `BASE_URL`
 must be the public origin, without a path. OIDC discovery must be reachable when
-the application starts.
+the application starts. Dumpbox sends `Strict-Transport-Security` itself when
+`BASE_URL` uses `https`; the proxy should also redirect HTTP to HTTPS and apply
+request-rate and minimum-transfer-rate limits.
 
 ## Configuration
 
@@ -43,6 +45,18 @@ the application starts.
 | `BASE_URL` | no | `http://localhost:8080` | Public application origin |
 | `LISTEN_ADDR` | no | `:8080` | HTTP listen address |
 | `DATA_DIR` | no | `./data` | Root upload directory |
+| `OIDC_ALLOW_INSECURE_ISSUER` | no | `false` | Allows a plaintext `http` issuer, and only when its host is loopback |
+| `MAX_REQUEST_BYTES` | no | `5368709120` (5 GiB) | Maximum bytes accepted per upload request |
+| `MAX_FILE_BYTES` | no | `5368709120` (5 GiB) | Maximum bytes accepted per file |
+| `MAX_FILES_PER_REQUEST` | no | `100` | Maximum files accepted per upload request |
+| `MAX_CONCURRENT_UPLOADS_PER_USER` | no | `4` | Concurrent uploads allowed per user |
+| `MAX_CONCURRENT_UPLOADS` | no | `32` | Concurrent uploads allowed across all users |
+
+`OIDC_ISSUER_URL` must be an absolute `https` URL without userinfo, query, or
+fragment. Requests over the limits are rejected with `413`, and requests over the
+concurrency caps with `429`. These application limits do not replace storage
+quotas: the service enforces no per-user disk quota, so also apply filesystem
+quotas or volume size limits to the data directory.
 
 The OIDC scopes are `openid profile email`. User folder names include a sanitized
 `preferred_username` followed by a hash of the immutable OIDC `sub` claim. If
@@ -72,6 +86,16 @@ service. Run this command as `root` in the Proxmox VE shell:
 ```sh
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/adusak/Dumpbox/main/scripts/proxmox-lxc.sh)"
 ```
+
+> [!WARNING]
+> This bootstrap command, and the `update` command it installs, download a
+> script from the mutable `main` branch and execute it as `root` on the Proxmox
+> host or in the container. TLS authenticates GitHub, but it does not bind the
+> content to a reviewed revision, so a compromise of the repository, a
+> maintainer account, or the delivery path at that moment becomes root command
+> execution. Review the script before running it, or replace `main` with a
+> commit SHA you have reviewed, and set `DUMPBOX_INSTALLER_URL` for `update` to
+> the same pinned revision.
 
 The script prompts for the container resources, an optional IPv4 address in
 CIDR notation, and required OIDC settings. It uses DHCP on `vmbr0` when the
