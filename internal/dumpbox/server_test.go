@@ -66,6 +66,23 @@ func TestTamperedSessionIsRejected(t *testing.T) {
 	}
 }
 
+func TestLogoutReturnsToLandingPage(t *testing.T) {
+	app := testServer(t)
+	request := httptest.NewRequest(http.MethodPost, "https://dumpbox.example/logout", nil)
+	request.Header.Set("Origin", "https://dumpbox.example")
+	request.AddCookie(&http.Cookie{Name: sessionCookie, Value: authenticatedCookie(t, app)})
+	response := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(response, request)
+
+	if response.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusSeeOther)
+	}
+	if location := response.Header().Get("Location"); location != "/" {
+		t.Fatalf("location = %q, want /", location)
+	}
+}
+
 func TestUploadStreamsToUserDirectory(t *testing.T) {
 	app := testServer(t)
 	content := bytes.Repeat([]byte("large enough to copy in chunks\n"), 20_000)
