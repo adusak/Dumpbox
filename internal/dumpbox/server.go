@@ -391,6 +391,9 @@ func (s *Server) sameOrigin(r *http.Request) bool {
 	if origin == "" {
 		return true
 	}
+	if origin == "null" {
+		return strings.EqualFold(r.Header.Get("Sec-Fetch-Site"), "same-origin")
+	}
 	parsed, err := url.Parse(origin)
 	return err == nil &&
 		strings.EqualFold(parsed.Scheme, s.baseURL.Scheme) &&
