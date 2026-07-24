@@ -48,6 +48,20 @@ prompt_optional_value() {
   printf -v "$variable" '%s' "$value"
 }
 
+validate_ipv4_address() {
+  local value="$1"
+  local variable="$2"
+  local octet
+  local -a octets
+
+  [[ "$value" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] ||
+    fail "$variable must be an IPv4 address"
+  IFS=. read -r -a octets <<<"$value"
+  for octet in "${octets[@]}"; do
+    ((10#$octet <= 255)) || fail "invalid IPv4 address for $variable"
+  done
+}
+
 write_shell_value() {
   printf '%s=' "$1"
   printf '%q' "$2"
@@ -70,6 +84,10 @@ prompt_value MEMORY "Memory in MiB" "512"
 prompt_value DISK_SIZE "Disk size in GiB" "8"
 prompt_value BRIDGE "Network bridge" "vmbr0"
 prompt_optional_value IPV4_ADDRESS "IPv4 address in CIDR notation (leave blank for DHCP)"
+IPV4_GATEWAY="${IPV4_GATEWAY:-}"
+if [[ -n "$IPV4_ADDRESS" ]]; then
+  prompt_value IPV4_GATEWAY "IPv4 gateway"
+fi
 prompt_value TEMPLATE_STORAGE "Template storage" "$default_template_storage"
 prompt_value ROOT_STORAGE "Container storage" "$default_root_storage"
 prompt_value BASE_URL "Public Dumpbox URL (for example, https://dumpbox.example.com)"
@@ -86,11 +104,8 @@ prompt_value OIDC_CLIENT_SECRET "OIDC client secret" "" true
 if [[ -n "$IPV4_ADDRESS" ]]; then
   [[ "$IPV4_ADDRESS" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]|[12][0-9]|3[0-2])$ ]] ||
     fail "IPV4_ADDRESS must be an IPv4 address in CIDR notation"
-  address="${IPV4_ADDRESS%/*}"
-  IFS=. read -r -a octets <<<"$address"
-  for octet in "${octets[@]}"; do
-    ((10#$octet <= 255)) || fail "invalid IPv4 address"
-  done
+  validate_ipv4_address "${IPV4_ADDRESS%/*}" IPV4_ADDRESS
+  validate_ipv4_address "$IPV4_GATEWAY" IPV4_GATEWAY
 fi
 [[ -n "$TEMPLATE_STORAGE" ]] || fail "no active storage supports container templates"
 [[ -n "$ROOT_STORAGE" ]] || fail "no active storage supports container root directories"
@@ -117,13 +132,14 @@ fi
 
 echo "Creating unprivileged LXC ${CTID}..."
 network_ip="${IPV4_ADDRESS:-dhcp}"
+network_gateway="${IPV4_GATEWAY:+,gw=${IPV4_GATEWAY}}"
 pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${template}" \
   --hostname "$HOSTNAME" \
   --cores "$CORES" \
   --memory "$MEMORY" \
   --swap 512 \
   --rootfs "${ROOT_STORAGE}:${DISK_SIZE}" \
-  --net0 "name=eth0,bridge=${BRIDGE},ip=${network_ip},type=veth" \
+  --net0 "name=eth0,bridge=${BRIDGE},ip=${network_ip}${network_gateway},type=veth" \
   --unprivileged 1 \
   --onboot 1 \
   --start 1
