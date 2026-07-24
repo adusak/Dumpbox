@@ -7,6 +7,7 @@ readonly CONFIG_DIR="/etc/dumpbox"
 readonly CONFIG_FILE="${CONFIG_DIR}/dumpbox.env"
 readonly DATA_DIR="/var/lib/dumpbox"
 readonly SERVICE_FILE="/etc/systemd/system/dumpbox.service"
+readonly UPDATE_COMMAND="${INSTALL_DIR}/update"
 
 fail() {
   echo "Error: $*" >&2
@@ -95,6 +96,20 @@ fi
 install -d -m 0750 -o root -g dumpbox "$CONFIG_DIR"
 install -d -m 0700 -o dumpbox -g dumpbox "$DATA_DIR"
 install -m 0755 "${temporary_dir}/dumpbox" "${INSTALL_DIR}/dumpbox"
+cat >"${temporary_dir}/update" <<'EOF'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly INSTALLER_URL="${DUMPBOX_INSTALLER_URL:-https://raw.githubusercontent.com/adusak/Dumpbox/main/scripts/install.sh}"
+
+[[ $EUID -eq 0 ]] || {
+  echo "Error: run update as root" >&2
+  exit 1
+}
+
+curl -fsSL "$INSTALLER_URL" | bash
+EOF
+install -m 0755 "${temporary_dir}/update" "$UPDATE_COMMAND"
 
 if [[ ! -f "$CONFIG_FILE" || "${DUMPBOX_RECONFIGURE:-false}" == "true" ]]; then
   prompt_value BASE_URL "Public URL (for example, https://dumpbox.example.com)"

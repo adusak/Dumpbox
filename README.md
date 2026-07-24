@@ -96,13 +96,16 @@ Inside the container:
 - logs are available with `journalctl -u dumpbox`;
 - the service is managed with `systemctl {status,restart} dumpbox`.
 
-Back up `/etc/dumpbox` and `/var/lib/dumpbox`, or use Proxmox backups. To update,
-rerun the Linux installer inside the container; it preserves existing
-configuration and verifies the release checksum:
+Back up `/etc/dumpbox` and `/var/lib/dumpbox`, or use Proxmox backups. To install
+the latest release from inside the container, run:
 
 ```sh
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/adusak/Dumpbox/main/scripts/install.sh)"
+update
 ```
+
+The update command preserves existing configuration, verifies the release
+checksum, and restarts the service. Existing installations can add the command
+by rerunning the Linux installer once.
 
 The Linux installer also works on an existing systemd-based AMD64 or ARM64
 Debian/Ubuntu host.
