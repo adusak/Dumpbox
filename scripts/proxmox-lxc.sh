@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly INSTALLER_URL="${DUMPBOX_INSTALLER_URL:-https://raw.githubusercontent.com/adusak/Dumpbox/main/scripts/install.sh}"
+
+fail() {
+  echo "Error: $*" >&2
+  exit 1
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || fail "required Proxmox command not found: $1"
+}
+
+prompt_value() {
+  local variable="$1"
+  local label="$2"
+  local default="${3:-}"
+  local secret="${4:-false}"
+  local value="${!variable:-}"
+  local prompt="$label"
+
+  [[ -n "$default" ]] && prompt+=" [$default]"
+  if [[ -z "$value" ]]; then
+    [[ -r /dev/tty ]] || fail "$variable must be set for a non-interactive installation"
+    if [[ "$secret" == "true" ]]; then
+      read -r -s -p "$prompt: " value </dev/tty
+      echo >/dev/tty
+    else
+      read -r -p "$prompt: " value </dev/tty
+    fi
+  fi
+  value="${value:-$default}"
+  [[ -n "$value" ]] || fail "$variable cannot be empty"
+  [[ "$value" != *$'\n'* && "$value" != *$'\r'* ]] || fail "$variable cannot contain newlines"
+  printf -v "$variable" '%s' "$value"
+}
+
+write_shell_value() {
+  printf '%s=' "$1"
+  printf '%q' "$2"
+  printf '\n'
+}
+
+[[ $EUID -eq 0 ]] || fail "run this script as root on a Proxmox VE host"
+for command in pveversion pct pveam pvesm curl; do
+  require_command "$command"
+done
+
+default_ctid="$(pvesh get /cluster/nextid 2>/dev/null || true)"
+default_template_storage="$(pvesm status -content vztmpl | awk 'NR > 1 && $3 == "active" { print $1; exit }')"
+default_root_storage="$(pvesm status -content rootdir | awk 'NR > 1 && $3 == "active" { print $1; exit }')"
+
+prompt_value CTID "Container ID" "$default_ctid"
+prompt_value HOSTNAME "Container hostname" "dumpbox"
+prompt_value CORES "CPU cores" "1"
+prompt_value MEMORY "Memory in MiB" "512"
+prompt_value DISK_SIZE "Disk size in GiB" "8"
+prompt_value BRIDGE "Network bridge" "vmbr0"
+prompt_value TEMPLATE_STORAGE "Template storage" "$default_template_storage"
+prompt_value ROOT_STORAGE "Container storage" "$default_root_storage"
+prompt_value BASE_URL "Public Dumpbox URL (for example, https://dumpbox.example.com)"
+prompt_value OIDC_ISSUER_URL "OIDC issuer URL"
+prompt_value OIDC_CLIENT_ID "OIDC client ID" "dumpbox"
+prompt_value OIDC_CLIENT_SECRET "OIDC client secret" "" true
+
+[[ "$CTID" =~ ^[1-9][0-9]*$ ]] || fail "CTID must be a positive integer"
+[[ "$CORES" =~ ^[1-9][0-9]*$ ]] || fail "CORES must be a positive integer"
+[[ "$MEMORY" =~ ^[1-9][0-9]*$ ]] || fail "MEMORY must be a positive integer"
+[[ "$DISK_SIZE" =~ ^[1-9][0-9]*$ ]] || fail "DISK_SIZE must be a positive integer"
+[[ "$HOSTNAME" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]] || fail "invalid hostname"
+[[ "$BRIDGE" =~ ^[A-Za-z0-9_.:-]+$ ]] || fail "invalid network bridge"
+[[ -n "$TEMPLATE_STORAGE" ]] || fail "no active storage supports container templates"
+[[ -n "$ROOT_STORAGE" ]] || fail "no active storage supports container root directories"
+if pct status "$CTID" >/dev/null 2>&1; then
+  fail "container ${CTID} already exists"
+fi
+
+debian_version="${DEBIAN_VERSION:-13}"
+echo "Refreshing container template catalog..."
+pveam update >/dev/null
+template="$(
+  pveam available --section system |
+    awk -v version="$debian_version" '$2 ~ ("^debian-" version "-standard_") { print $2 }' |
+    sort -V |
+    tail -n 1
+)"
+[[ -n "$template" ]] || fail "no Debian ${debian_version} standard template is available"
+
+if ! pveam list "$TEMPLATE_STORAGE" | awk 'NR > 1 { print $1 }' |
+  grep -Fqx "${TEMPLATE_STORAGE}:vztmpl/${template}"; then
+  echo "Downloading ${template}..."
+  pveam download "$TEMPLATE_STORAGE" "$template"
+fi
+
+echo "Creating unprivileged LXC ${CTID}..."
+pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${template}" \
+  --hostname "$HOSTNAME" \
+  --cores "$CORES" \
+  --memory "$MEMORY" \
+  --swap 512 \
+  --rootfs "${ROOT_STORAGE}:${DISK_SIZE}" \
+  --net0 "name=eth0,bridge=${BRIDGE},ip=dhcp,type=veth" \
+  --unprivileged 1 \
+  --onboot 1 \
+  --start 1
+
+installation_complete=false
+cleanup() {
+  rm -f "${configuration_file:-}"
+  if [[ "$installation_complete" != "true" ]]; then
+    echo "Installation failed. Container ${CTID} was left in place for troubleshooting." >&2
+  fi
+}
+trap cleanup EXIT
+
+echo "Waiting for container networking..."
+pct exec "$CTID" -- bash -c \
+  'for attempt in {1..30}; do apt-get update && exit 0; sleep 2; done; exit 1'
+pct exec "$CTID" -- apt-get install -y --no-install-recommends ca-certificates curl openssl
+
+configuration_file="$(mktemp)"
+chmod 600 "$configuration_file"
+{
+  write_shell_value BASE_URL "$BASE_URL"
+  write_shell_value OIDC_ISSUER_URL "$OIDC_ISSUER_URL"
+  write_shell_value OIDC_CLIENT_ID "$OIDC_CLIENT_ID"
+  write_shell_value OIDC_CLIENT_SECRET "$OIDC_CLIENT_SECRET"
+  [[ -z "${DUMPBOX_VERSION:-}" ]] || write_shell_value DUMPBOX_VERSION "$DUMPBOX_VERSION"
+} >"$configuration_file"
+
+pct push "$CTID" "$configuration_file" /root/dumpbox-install.env --perms 0600
+pct exec "$CTID" -- env DUMPBOX_INSTALLER_URL="$INSTALLER_URL" bash -c '
+  set -Eeuo pipefail
+  set -a
+  source /root/dumpbox-install.env
+  set +a
+  trap "rm -f /root/dumpbox-install.env" EXIT
+  curl -fsSL "$DUMPBOX_INSTALLER_URL" | bash
+'
+
+installation_complete=true
+container_ip="$(pct exec "$CTID" -- hostname -I | awk '{ print $1 }')"
+echo
+echo "Dumpbox LXC ${CTID} is ready."
+echo "Container address: http://${container_ip}:8080"
+echo "OIDC callback URL: ${BASE_URL%/}/auth/callback"
+echo "Terminate TLS at a reverse proxy and forward it to the container address."
