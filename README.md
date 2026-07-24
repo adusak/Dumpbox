@@ -72,12 +72,14 @@ service. Run this command as `root` in the Proxmox VE shell:
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/adusak/Dumpbox/main/scripts/proxmox-lxc.sh)"
 ```
 
-The script prompts for the container resources and required OIDC settings. It
-uses DHCP on `vmbr0` by default. Every prompt can also be supplied as an
-environment variable for unattended installation:
+The script prompts for the container resources, an optional IPv4 address in
+CIDR notation, and required OIDC settings. It uses DHCP on `vmbr0` when the
+address is left blank. Every prompt can also be supplied as an environment
+variable for unattended installation:
 
 ```sh
 CTID=120 HOSTNAME=dumpbox CORES=1 MEMORY=512 DISK_SIZE=20 \
+IPV4_ADDRESS=192.0.2.10/24 \
 BRIDGE=vmbr0 TEMPLATE_STORAGE=local ROOT_STORAGE=local-lvm \
 BASE_URL=https://dumpbox.example \
 OIDC_ISSUER_URL=https://identity.example \
