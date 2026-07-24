@@ -40,8 +40,11 @@ prompt_optional_value() {
   local variable="$1"
   local label="$2"
   local value="${!variable:-}"
+  local supplied=false
 
-  if [[ -z "$value" ]] && { : </dev/tty; } 2>/dev/null; then
+  [[ -v "$variable" ]] && supplied=true
+
+  if [[ "$supplied" == "false" ]] && { : </dev/tty; } 2>/dev/null; then
     read -r -p "$label: " value </dev/tty
   fi
   [[ "$value" != *$'\n'* && "$value" != *$'\r'* ]] || fail "$variable cannot contain newlines"
@@ -106,6 +109,8 @@ if [[ -n "$IPV4_ADDRESS" ]]; then
     fail "IPV4_ADDRESS must be an IPv4 address in CIDR notation"
   validate_ipv4_address "${IPV4_ADDRESS%/*}" IPV4_ADDRESS
   validate_ipv4_address "$IPV4_GATEWAY" IPV4_GATEWAY
+elif [[ -n "$IPV4_GATEWAY" ]]; then
+  fail "IPV4_GATEWAY requires IPV4_ADDRESS"
 fi
 [[ -n "$TEMPLATE_STORAGE" ]] || fail "no active storage supports container templates"
 [[ -n "$ROOT_STORAGE" ]] || fail "no active storage supports container root directories"
@@ -132,7 +137,10 @@ fi
 
 echo "Creating unprivileged LXC ${CTID}..."
 network_ip="${IPV4_ADDRESS:-dhcp}"
-network_gateway="${IPV4_GATEWAY:+,gw=${IPV4_GATEWAY}}"
+network_gateway=""
+if [[ -n "$IPV4_ADDRESS" ]]; then
+  network_gateway=",gw=${IPV4_GATEWAY}"
+fi
 pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${template}" \
   --hostname "$HOSTNAME" \
   --cores "$CORES" \
