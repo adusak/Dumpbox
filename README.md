@@ -60,3 +60,62 @@ go build ./cmd/dumpbox
 ```
 
 The health endpoint is available at `GET /healthz`.
+
+## Install in a Proxmox LXC
+
+The installer creates an unprivileged Debian LXC, installs the latest verified
+Dumpbox release, configures a dedicated system user and hardened systemd unit,
+and starts the service. Run this command as `root` in the Proxmox VE shell:
+
+```sh
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/adusak/Dumpbox/main/scripts/proxmox-lxc.sh)"
+```
+
+The script prompts for the container resources and required OIDC settings. It
+uses DHCP on `vmbr0` by default. Every prompt can also be supplied as an
+environment variable for unattended installation:
+
+```sh
+CTID=120 HOSTNAME=dumpbox CORES=1 MEMORY=512 DISK_SIZE=20 \
+BRIDGE=vmbr0 TEMPLATE_STORAGE=local ROOT_STORAGE=local-lvm \
+BASE_URL=https://dumpbox.example \
+OIDC_ISSUER_URL=https://identity.example \
+OIDC_CLIENT_ID=dumpbox \
+OIDC_CLIENT_SECRET=replace-me \
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/adusak/Dumpbox/main/scripts/proxmox-lxc.sh)"
+```
+
+Register `${BASE_URL}/auth/callback` with the OIDC provider. Terminate TLS at a
+reverse proxy and forward requests to the displayed LXC address on port 8080.
+
+Inside the container:
+
+- configuration is stored in `/etc/dumpbox/dumpbox.env`;
+- uploads are stored in `/var/lib/dumpbox`;
+- logs are available with `journalctl -u dumpbox`;
+- the service is managed with `systemctl {status,restart} dumpbox`.
+
+Back up `/etc/dumpbox` and `/var/lib/dumpbox`, or use Proxmox backups. To update,
+rerun the Linux installer inside the container; it preserves existing
+configuration and verifies the release checksum:
+
+```sh
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/adusak/Dumpbox/main/scripts/install.sh)"
+```
+
+The Linux installer also works on an existing systemd-based AMD64 or ARM64
+Debian/Ubuntu host.
+
+## Releases
+
+Pushing a semantic version tag builds static Linux AMD64 and ARM64 archives,
+generates SHA-256 checksums, and publishes a GitHub release:
+
+```sh
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Release assets use the name
+`dumpbox_<version>_linux_<architecture>.tar.gz`. The Proxmox and Linux
+installers consume these assets automatically.
