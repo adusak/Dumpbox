@@ -46,7 +46,7 @@ write_environment_value() {
 }
 
 [[ $EUID -eq 0 ]] || fail "run this installer as root"
-for command in curl sha256sum tar install systemctl useradd getent openssl; do
+for command in curl sha256sum tar install systemctl useradd groupadd getent openssl; do
   require_command "$command"
 done
 
