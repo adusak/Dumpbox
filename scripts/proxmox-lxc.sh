@@ -43,7 +43,7 @@ write_shell_value() {
 }
 
 [[ $EUID -eq 0 ]] || fail "run this script as root on a Proxmox VE host"
-for command in pveversion pct pveam pvesm curl; do
+for command in pveversion pvesh pct pveam pvesm curl; do
   require_command "$command"
 done
 
@@ -130,6 +130,8 @@ chmod 600 "$configuration_file"
 } >"$configuration_file"
 
 pct push "$CTID" "$configuration_file" /root/dumpbox-install.env --perms 0600
+# The variables in this command are expanded inside the container.
+# shellcheck disable=SC2016
 pct exec "$CTID" -- env DUMPBOX_INSTALLER_URL="$INSTALLER_URL" bash -c '
   set -Eeuo pipefail
   set -a
