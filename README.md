@@ -68,8 +68,16 @@ Dumpbox release, configures a dedicated system user and hardened systemd unit,
 and starts the service. Run this command as `root` in the Proxmox VE shell:
 
 ```sh
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/adusak/Dumpbox/main/scripts/proxmox-lxc.sh)"
+export GITHUB_TOKEN=github_pat_your_fine_grained_token
+bash -c "$(printf 'user = \"x-access-token:%s\"\n' "$GITHUB_TOKEN" |
+  curl --config - -fsSL \
+  -H "Accept: application/vnd.github.raw+json" \
+  "https://api.github.com/repos/adusak/Dumpbox/contents/scripts/proxmox-lxc.sh?ref=main")"
 ```
+
+The fine-grained token must have read access to this private repository's
+contents. It is also used inside the container to download private release
+assets.
 
 The script prompts for the container resources and required OIDC settings. It
 uses DHCP on `vmbr0` by default. Every prompt can also be supplied as an
@@ -82,7 +90,10 @@ BASE_URL=https://dumpbox.example \
 OIDC_ISSUER_URL=https://identity.example \
 OIDC_CLIENT_ID=dumpbox \
 OIDC_CLIENT_SECRET=replace-me \
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/adusak/Dumpbox/main/scripts/proxmox-lxc.sh)"
+bash -c "$(printf 'user = \"x-access-token:%s\"\n' "$GITHUB_TOKEN" |
+  curl --config - -fsSL \
+  -H "Accept: application/vnd.github.raw+json" \
+  "https://api.github.com/repos/adusak/Dumpbox/contents/scripts/proxmox-lxc.sh?ref=main")"
 ```
 
 Register `${BASE_URL}/auth/callback` with the OIDC provider. Terminate TLS at a
@@ -100,11 +111,15 @@ rerun the Linux installer inside the container; it preserves existing
 configuration and verifies the release checksum:
 
 ```sh
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/adusak/Dumpbox/main/scripts/install.sh)"
+export GITHUB_TOKEN=github_pat_your_fine_grained_token
+bash -c "$(printf 'user = \"x-access-token:%s\"\n' "$GITHUB_TOKEN" |
+  curl --config - -fsSL \
+  -H "Accept: application/vnd.github.raw+json" \
+  "https://api.github.com/repos/adusak/Dumpbox/contents/scripts/install.sh?ref=main")"
 ```
 
 The Linux installer also works on an existing systemd-based AMD64 or ARM64
-Debian/Ubuntu host.
+Debian/Ubuntu host with `curl`, `jq`, `openssl`, and standard system utilities.
 
 ## Releases
 

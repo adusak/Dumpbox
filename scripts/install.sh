@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 readonly REPOSITORY="${DUMPBOX_REPOSITORY:-adusak/Dumpbox}"
+readonly API_URL="https://api.github.com/repos/${REPOSITORY}"
 readonly INSTALL_DIR="/usr/local/bin"
 readonly CONFIG_DIR="/etc/dumpbox"
 readonly CONFIG_FILE="${CONFIG_DIR}/dumpbox.env"
@@ -15,6 +16,15 @@ fail() {
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || fail "required command not found: $1"
+}
+
+github_curl() {
+  if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    printf 'user = "x-access-token:%s"\n' "$GITHUB_TOKEN" |
+      curl --config - "$@"
+  else
+    curl "$@"
+  fi
 }
 
 prompt_value() {
@@ -46,7 +56,7 @@ write_environment_value() {
 }
 
 [[ $EUID -eq 0 ]] || fail "run this installer as root"
-for command in curl sha256sum tar install systemctl useradd groupadd getent openssl; do
+for command in curl jq sha256sum tar install systemctl useradd groupadd getent openssl; do
   require_command "$command"
 done
 
@@ -57,24 +67,28 @@ case "$(uname -m)" in
 esac
 
 version="${DUMPBOX_VERSION:-latest}"
+curl_args=(-fsSL --retry 3 --retry-delay 2)
 if [[ "$version" == "latest" ]]; then
-  release_url="$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
-    "https://github.com/${REPOSITORY}/releases/latest")"
-  version="${release_url##*/}"
+  release_json="$(github_curl "${curl_args[@]}" "${API_URL}/releases/latest")"
+  version="$(jq -er '.tag_name' <<<"$release_json")"
+else
+  release_json="$(github_curl "${curl_args[@]}" "${API_URL}/releases/tags/${version}")"
 fi
 [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] ||
   fail "invalid release version: $version"
 
 archive="dumpbox_${version#v}_linux_${arch}.tar.gz"
-download_url="https://github.com/${REPOSITORY}/releases/download/${version}"
 temporary_dir="$(mktemp -d)"
 trap 'rm -rf "$temporary_dir"' EXIT
 
 echo "Downloading Dumpbox ${version} for ${arch}..."
-curl -fL --retry 3 --retry-delay 2 -o "${temporary_dir}/${archive}" \
-  "${download_url}/${archive}"
-curl -fL --retry 3 --retry-delay 2 -o "${temporary_dir}/checksums.txt" \
-  "${download_url}/checksums.txt"
+for asset in "$archive" checksums.txt; do
+  asset_id="$(jq -er --arg name "$asset" \
+    '.assets[] | select(.name == $name) | .id' <<<"$release_json")" ||
+    fail "release ${version} does not contain ${asset}"
+  github_curl "${curl_args[@]}" -L -H "Accept: application/octet-stream" \
+    -o "${temporary_dir}/${asset}" "${API_URL}/releases/assets/${asset_id}"
+done
 
 (
   cd "$temporary_dir"

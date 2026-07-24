@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-readonly INSTALLER_URL="${DUMPBOX_INSTALLER_URL:-https://raw.githubusercontent.com/adusak/Dumpbox/main/scripts/install.sh}"
+readonly INSTALLER_URL="${DUMPBOX_INSTALLER_URL:-https://api.github.com/repos/adusak/Dumpbox/contents/scripts/install.sh?ref=main}"
 
 fail() {
   echo "Error: $*" >&2
@@ -117,7 +117,7 @@ trap cleanup EXIT
 echo "Waiting for container networking..."
 pct exec "$CTID" -- bash -c \
   'for attempt in {1..30}; do apt-get update && exit 0; sleep 2; done; exit 1'
-pct exec "$CTID" -- apt-get install -y --no-install-recommends ca-certificates curl openssl
+pct exec "$CTID" -- apt-get install -y --no-install-recommends ca-certificates curl jq openssl
 
 configuration_file="$(mktemp)"
 chmod 600 "$configuration_file"
@@ -126,6 +126,7 @@ chmod 600 "$configuration_file"
   write_shell_value OIDC_ISSUER_URL "$OIDC_ISSUER_URL"
   write_shell_value OIDC_CLIENT_ID "$OIDC_CLIENT_ID"
   write_shell_value OIDC_CLIENT_SECRET "$OIDC_CLIENT_SECRET"
+  [[ -z "${GITHUB_TOKEN:-}" ]] || write_shell_value GITHUB_TOKEN "$GITHUB_TOKEN"
   [[ -z "${DUMPBOX_VERSION:-}" ]] || write_shell_value DUMPBOX_VERSION "$DUMPBOX_VERSION"
 } >"$configuration_file"
 
@@ -138,7 +139,13 @@ pct exec "$CTID" -- env DUMPBOX_INSTALLER_URL="$INSTALLER_URL" bash -c '
   source /root/dumpbox-install.env
   set +a
   trap "rm -f /root/dumpbox-install.env" EXIT
-  curl -fsSL "$DUMPBOX_INSTALLER_URL" | bash
+  curl_args=(-fsSL -H "Accept: application/vnd.github.raw+json")
+  if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    printf "user = \"x-access-token:%s\"\n" "$GITHUB_TOKEN" |
+      curl --config - "${curl_args[@]}" "$DUMPBOX_INSTALLER_URL" | bash
+  else
+    curl "${curl_args[@]}" "$DUMPBOX_INSTALLER_URL" | bash
+  fi
 '
 
 installation_complete=true
