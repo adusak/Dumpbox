@@ -25,8 +25,13 @@ Generate the session signing key and start the service:
 
 ```sh
 openssl rand -base64 32
-docker compose up -d --build
+docker compose up -d
 ```
+
+The compose file runs the published multi-architecture image
+`ghcr.io/adusak/dumpbox:latest`. Set `DUMPBOX_VERSION` to pin a released tag,
+for example `DUMPBOX_VERSION=1.0.0`, or run `docker compose up -d --build` to
+build the image from this checkout instead.
 
 Terminate TLS at a reverse proxy and forward requests to port 8080. `BASE_URL`
 must be the public origin, without a path. OIDC discovery must be reachable when
@@ -140,7 +145,8 @@ Debian/Ubuntu host.
 ## Releases
 
 Pushing a semantic version tag builds static Linux AMD64 and ARM64 archives,
-generates SHA-256 checksums, and publishes a GitHub release:
+generates SHA-256 checksums, publishes a GitHub release, and pushes a
+multi-architecture container image to GitHub Container Registry:
 
 ```sh
 git tag v1.0.0
@@ -149,4 +155,7 @@ git push origin v1.0.0
 
 Release assets use the name
 `dumpbox_<version>_linux_<architecture>.tar.gz`. The Proxmox and Linux
-installers consume these assets automatically.
+installers consume these assets automatically. The image is published as
+`ghcr.io/adusak/dumpbox` and tagged with the full version, the major and minor
+version, and `latest` for stable releases. Pre-release tags (for example
+`v1.0.0-rc.1`) are not tagged `latest`.
