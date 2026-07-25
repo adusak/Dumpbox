@@ -1,6 +1,8 @@
 services:
   dumpbox:
+    image: ghcr.io/adusak/dumpbox:${DUMPBOX_VERSION:-latest}
     build: .
+    pull_policy: always
     restart: unless-stopped
     ports:
       - "8080:8080"
