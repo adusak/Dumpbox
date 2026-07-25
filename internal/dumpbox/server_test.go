@@ -166,7 +166,7 @@ func TestMetricsReportPerUserUploads(t *testing.T) {
 
 	request := httptest.NewRequest(http.MethodGet, "https://dumpbox.example/metrics", nil)
 	response := httptest.NewRecorder()
-	app.Handler().ServeHTTP(response, request)
+	app.MetricsHandler().ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("metrics status = %d, want %d", response.Code, http.StatusOK)
@@ -183,6 +183,18 @@ func TestMetricsReportPerUserUploads(t *testing.T) {
 		if !strings.Contains(body, metric) {
 			t.Errorf("metrics response does not contain %q", metric)
 		}
+	}
+}
+
+func TestMetricsAreNotExposedOnApplicationHandler(t *testing.T) {
+	app := testServer(t)
+	request := httptest.NewRequest(http.MethodGet, "https://dumpbox.example/metrics", nil)
+	response := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(response, request)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusNotFound)
 	}
 }
 

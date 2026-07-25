@@ -93,15 +93,21 @@ func NewServer(config Config, provider *oidc.Provider, logger *slog.Logger) (*Se
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.health)
-	mux.Handle("GET /metrics", s.metrics.handler())
 	mux.HandleFunc("GET /favicon.svg", brandAsset("favicon.svg"))
 	mux.HandleFunc("GET /assets/logo.svg", brandAsset("logo.svg"))
 	mux.HandleFunc("GET /login", s.login)
 	mux.HandleFunc("GET /auth/callback", s.callback)
 	mux.HandleFunc("POST /logout", s.logout)
+	mux.HandleFunc("GET /metrics", http.NotFound)
 	mux.HandleFunc("GET /", s.home)
 	mux.Handle("POST /upload", s.requireAuth(s.metrics.observeUpload(http.HandlerFunc(s.upload))))
 	return s.securityHeaders(mux)
+}
+
+func (s *Server) MetricsHandler() http.Handler {
+	mux := http.NewServeMux()
+	mux.Handle("GET /metrics", s.metrics.handler())
+	return mux
 }
 
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
