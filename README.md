@@ -79,7 +79,19 @@ go vet ./...
 go build ./cmd/dumpbox
 ```
 
-The health endpoint is available at `GET /healthz`.
+The health endpoint is available at `GET /healthz`. Prometheus metrics are
+available at `GET /metrics`, including Go and process metrics plus:
+
+- `dumpbox_uploaded_files_total{user}` and
+  `dumpbox_uploaded_bytes_total{user}` for successfully stored data;
+- `dumpbox_upload_requests_total{user,code}` for upload outcomes;
+- `dumpbox_upload_duration_seconds` and `dumpbox_active_uploads`.
+
+The `user` label is the first 24 hexadecimal characters of the SHA-256 hash of
+the immutable OIDC subject. It matches the suffix of that user's data directory,
+allowing operators to correlate usage without exporting usernames. The metrics
+endpoint is unauthenticated for Prometheus scraping; restrict it to the
+monitoring network at the reverse proxy because it exposes operational data.
 
 ## Install in a Proxmox LXC
 

@@ -45,6 +45,7 @@ type Server struct {
 	page         *template.Template
 	landingPage  *template.Template
 	logger       *slog.Logger
+	metrics      *metrics
 	now          func() time.Time
 }
 
@@ -84,6 +85,7 @@ func NewServer(config Config, provider *oidc.Provider, logger *slog.Logger) (*Se
 		page:         page,
 		landingPage:  landingPage,
 		logger:       logger,
+		metrics:      newMetrics(),
 		now:          time.Now,
 	}, nil
 }
@@ -91,13 +93,14 @@ func NewServer(config Config, provider *oidc.Provider, logger *slog.Logger) (*Se
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.health)
+	mux.Handle("GET /metrics", s.metrics.handler())
 	mux.HandleFunc("GET /favicon.svg", brandAsset("favicon.svg"))
 	mux.HandleFunc("GET /assets/logo.svg", brandAsset("logo.svg"))
 	mux.HandleFunc("GET /login", s.login)
 	mux.HandleFunc("GET /auth/callback", s.callback)
 	mux.HandleFunc("POST /logout", s.logout)
 	mux.HandleFunc("GET /", s.home)
-	mux.Handle("POST /upload", s.requireAuth(http.HandlerFunc(s.upload)))
+	mux.Handle("POST /upload", s.requireAuth(s.metrics.observeUpload(http.HandlerFunc(s.upload))))
 	return s.securityHeaders(mux)
 }
 
@@ -252,6 +255,8 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "Too many uploads are in progress. Try again shortly."})
 		return
 	}
+	s.metrics.activeUploads.Inc()
+	defer s.metrics.activeUploads.Dec()
 	defer s.uploadSlots.release(user.Subject)
 
 	if s.limits.requestBytes > 0 {
@@ -291,7 +296,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "Too many files in one upload."})
 			return
 		}
-		name, err := storePart(directory, part, s.limits.fileBytes)
+		name, written, err := storePart(directory, part, s.limits.fileBytes)
 		_ = part.Close()
 		if errors.Is(err, errTooLarge) {
 			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "The upload is larger than the configured limit."})
@@ -303,6 +308,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		uploaded = append(uploaded, name)
+		s.metrics.recordFile(user, written)
 	}
 	if len(uploaded) == 0 {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "No files were provided."})
@@ -318,14 +324,14 @@ func isRequestTooLarge(err error) bool {
 	return errors.As(err, &maxBytes)
 }
 
-func storePart(directory string, part *multipart.Part, maxFileBytes int64) (name string, err error) {
+func storePart(directory string, part *multipart.Part, maxFileBytes int64) (name string, written int64, err error) {
 	name = safeFilename(part.FileName())
 	if name == "" {
-		return "", errors.New("invalid filename")
+		return "", 0, errors.New("invalid filename")
 	}
 	temp, err := os.CreateTemp(directory, ".upload-*")
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	tempName := temp.Name()
 	defer func() {
@@ -335,37 +341,37 @@ func storePart(directory string, part *multipart.Part, maxFileBytes int64) (name
 		}
 	}()
 	if err = temp.Chmod(0o600); err != nil {
-		return "", err
+		return "", 0, err
 	}
 	buffer := make([]byte, 256*1024)
 	var source io.Reader = part
 	if maxFileBytes > 0 {
 		source = io.LimitReader(part, maxFileBytes+1)
 	}
-	written, err := io.CopyBuffer(temp, source, buffer)
+	written, err = io.CopyBuffer(temp, source, buffer)
 	if err != nil {
 		if isRequestTooLarge(err) {
-			return "", errTooLarge
+			return "", 0, errTooLarge
 		}
-		return "", err
+		return "", 0, err
 	}
 	if maxFileBytes > 0 && written > maxFileBytes {
-		return "", errTooLarge
+		return "", 0, errTooLarge
 	}
 	if err = temp.Sync(); err != nil {
-		return "", err
+		return "", 0, err
 	}
 	if err = temp.Close(); err != nil {
-		return "", err
+		return "", 0, err
 	}
 	name, err = publishFile(directory, name, tempName)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	if err = os.Remove(tempName); err != nil {
-		return "", err
+		return "", 0, err
 	}
-	return name, nil
+	return name, written, nil
 }
 
 func publishFile(directory, name, tempName string) (string, error) {
