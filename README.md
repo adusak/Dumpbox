@@ -108,7 +108,7 @@ address is left blank. Every prompt can also be supplied as an environment
 variable for unattended installation:
 
 ```sh
-CTID=120 HOSTNAME=dumpbox CORES=1 MEMORY=512 DISK_SIZE=20 \
+CTID=120 CT_HOSTNAME=dumpbox CORES=1 MEMORY=512 DISK_SIZE=20 \
 IPV4_ADDRESS=192.0.2.10/24 IPV4_GATEWAY=192.0.2.1 \
 BRIDGE=vmbr0 TEMPLATE_STORAGE=local ROOT_STORAGE=local-lvm \
 BASE_URL=https://dumpbox.example \
