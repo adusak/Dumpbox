@@ -269,12 +269,20 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var uploaded []string
+	discard := func() {
+		for _, name := range uploaded {
+			if err := os.Remove(filepath.Join(directory, name)); err != nil && !os.IsNotExist(err) {
+				s.logger.Error("remove incomplete upload", "subject", user.Subject, "error", err)
+			}
+		}
+	}
 	for {
 		part, err := reader.NextPart()
 		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
+			discard()
 			if isRequestTooLarge(err) {
 				writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "The upload is larger than the configured limit."})
 				return
@@ -288,16 +296,19 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		}
 		if s.limits.filesPerRequest > 0 && len(uploaded) >= s.limits.filesPerRequest {
 			_ = part.Close()
+			discard()
 			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "Too many files in one upload."})
 			return
 		}
 		name, err := storePart(directory, part, s.limits.fileBytes)
 		_ = part.Close()
 		if errors.Is(err, errTooLarge) {
+			discard()
 			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "The upload is larger than the configured limit."})
 			return
 		}
 		if err != nil {
+			discard()
 			s.logger.Error("store upload", "subject", user.Subject, "error", err)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Could not store the file."})
 			return
@@ -323,7 +334,7 @@ func storePart(directory string, part *multipart.Part, maxFileBytes int64) (name
 	if name == "" {
 		return "", errors.New("invalid filename")
 	}
-	temp, err := os.CreateTemp(directory, ".upload-*")
+	temp, err := os.CreateTemp(directory, tempPrefix+"*")
 	if err != nil {
 		return "", err
 	}
@@ -362,9 +373,7 @@ func storePart(directory string, part *multipart.Part, maxFileBytes int64) (name
 	if err != nil {
 		return "", err
 	}
-	if err = os.Remove(tempName); err != nil {
-		return "", err
-	}
+	_ = os.Remove(tempName)
 	return name, nil
 }
 

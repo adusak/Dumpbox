@@ -35,6 +35,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	stop, cancelStop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancelStop()
+	go app.RunCleanup(stop)
+
 	server := &http.Server{
 		Addr:              config.ListenAddr,
 		Handler:           app.Handler(),
@@ -50,8 +54,6 @@ func main() {
 		}
 	}()
 
-	stop, cancelStop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer cancelStop()
 	<-stop.Done()
 	shutdownContext, cancelShutdown := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancelShutdown()

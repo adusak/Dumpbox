@@ -69,6 +69,12 @@ The OIDC scopes are `openid profile email`. User folder names include a sanitize
 with `0600` permissions, user folders with `0700`, and duplicate filenames
 receive a numeric suffix instead of overwriting existing data.
 
+Uploads are streamed into a hidden temporary file and only become visible under
+their final name once the transfer completed. An aborted or rejected upload
+leaves nothing behind: its temporary file is removed immediately, files already
+stored for a failed multi-file request are removed as well, and any leftovers
+from a crash or a restart are swept at startup and hourly afterwards.
+
 ## Build and test
 
 Go 1.25 or newer is required.

@@ -470,3 +470,86 @@ func TestValidateIssuer(t *testing.T) {
 		}
 	}
 }
+
+func TestCleanIncompleteUploadsRemovesLeftoverTempFiles(t *testing.T) {
+	app := testServer(t)
+	directory := filepath.Join(app.dataDir, "alice-abc")
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	stale := filepath.Join(directory, tempPrefix+"stale")
+	fresh := filepath.Join(directory, tempPrefix+"fresh")
+	stored := filepath.Join(directory, "notes.txt")
+	for _, path := range []string{stale, fresh, stored} {
+		if err := os.WriteFile(path, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	old := time.Now().Add(-24 * time.Hour)
+	if err := os.Chtimes(stale, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	app.CleanIncompleteUploads(staleUploadAge)
+
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Fatalf("stale temporary file error = %v, want not exist", err)
+	}
+	if _, err := os.Stat(fresh); err != nil {
+		t.Fatalf("fresh temporary file was removed: %v", err)
+	}
+	if _, err := os.Stat(stored); err != nil {
+		t.Fatalf("stored file was removed: %v", err)
+	}
+
+	app.CleanIncompleteUploads(0)
+
+	if _, err := os.Stat(fresh); !os.IsNotExist(err) {
+		t.Fatalf("fresh temporary file error = %v, want not exist", err)
+	}
+	if _, err := os.Stat(stored); err != nil {
+		t.Fatalf("stored file was removed: %v", err)
+	}
+}
+
+func TestUploadRemovesEarlierFilesWhenRequestFails(t *testing.T) {
+	app := testServer(t)
+	app.limits.fileBytes = 8
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	for _, file := range []struct {
+		name    string
+		content []byte
+	}{{"small.txt", []byte("ok")}, {"big.bin", bytes.Repeat([]byte("a"), 64)}} {
+		part, err := writer.CreateFormFile("file", file.name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := part.Write(file.content); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "https://dumpbox.example/upload", &body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	request.Header.Set("Origin", "https://dumpbox.example")
+	request.Header.Set("X-Dumpbox-Upload", "1")
+	request.AddCookie(&http.Cookie{Name: sessionCookie, Value: authenticatedCookie(t, app)})
+	response := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(response, request)
+
+	if response.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusRequestEntityTooLarge)
+	}
+	directory := filepath.Join(app.dataDir, userDirectory(session{Subject: "subject-123", Username: "alice"}))
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("directory entries = %d, want no stored or partial file", len(entries))
+	}
+}
