@@ -81,7 +81,7 @@ default_template_storage="$(pvesm status -content vztmpl | awk 'NR > 1 && $3 == 
 default_root_storage="$(pvesm status -content rootdir | awk 'NR > 1 && $3 == "active" { print $1; exit }')"
 
 prompt_value CTID "Container ID" "$default_ctid"
-prompt_value HOSTNAME "Container hostname" "dumpbox"
+prompt_value CT_HOSTNAME "Container hostname" "dumpbox"
 prompt_value CORES "CPU cores" "1"
 prompt_value MEMORY "Memory in MiB" "512"
 prompt_value DISK_SIZE "Disk size in GiB" "8"
@@ -102,7 +102,7 @@ prompt_value OIDC_CLIENT_SECRET "OIDC client secret" "" true
 [[ "$CORES" =~ ^[1-9][0-9]*$ ]] || fail "CORES must be a positive integer"
 [[ "$MEMORY" =~ ^[1-9][0-9]*$ ]] || fail "MEMORY must be a positive integer"
 [[ "$DISK_SIZE" =~ ^[1-9][0-9]*$ ]] || fail "DISK_SIZE must be a positive integer"
-[[ "$HOSTNAME" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]] || fail "invalid hostname"
+[[ "$CT_HOSTNAME" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]] || fail "invalid hostname"
 [[ "$BRIDGE" =~ ^[A-Za-z0-9_.:-]+$ ]] || fail "invalid network bridge"
 if [[ -n "$IPV4_ADDRESS" ]]; then
   [[ "$IPV4_ADDRESS" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]|[12][0-9]|3[0-2])$ ]] ||
@@ -142,7 +142,7 @@ if [[ -n "$IPV4_ADDRESS" ]]; then
   network_gateway=",gw=${IPV4_GATEWAY}"
 fi
 pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${template}" \
-  --hostname "$HOSTNAME" \
+  --hostname "$CT_HOSTNAME" \
   --cores "$CORES" \
   --memory "$MEMORY" \
   --swap 512 \
