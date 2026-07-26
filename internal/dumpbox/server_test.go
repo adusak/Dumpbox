@@ -259,7 +259,7 @@ func TestStorePartCleansUpAfterPanic(t *testing.T) {
 				t.Fatal("storePart did not panic")
 			}
 		}()
-		_, _ = storePart(directory, part, defaultMaxFileBytes)
+		_, _, _ = storePart(directory, part, defaultMaxFileBytes)
 	}()
 
 	entries, err := os.ReadDir(directory)
