@@ -172,7 +172,17 @@ installations can add the command by running the Linux installer once.
 
 The Linux installer also works on an existing systemd-based AMD64 or ARM64
 Debian/Ubuntu host. Download `install.sh` from the chosen release and run it as
-root with `DUMPBOX_VERSION` set to that release tag.
+root with `DUMPBOX_VERSION` set to that release tag:
+
+```sh
+VERSION=v1.0.0
+curl -fLO "https://github.com/adusak/Dumpbox/releases/download/${VERSION}/install.sh"
+sudo env DUMPBOX_VERSION="$VERSION" bash install.sh
+```
+
+To upgrade an installation whose existing `update` command still expects
+Sigstore bundles, use this manual installation once; the newly installed
+`update` command no longer requires Cosign.
 
 ## Releases
 

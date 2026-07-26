@@ -205,6 +205,7 @@ pct push "$CTID" "$configuration_file" /root/dumpbox-install.env --perms 0600
 # The variables in this command are expanded inside the container.
 # shellcheck disable=SC2016
 pct exec "$CTID" -- env \
+  DUMPBOX_REPOSITORY="$REPOSITORY" \
   DUMPBOX_VERSION="$VERSION" \
   DUMPBOX_DOWNLOAD_URL="$DOWNLOAD_URL" \
   bash -c '
