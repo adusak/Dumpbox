@@ -31,13 +31,18 @@ docker compose up -d
 The compose file runs the published multi-architecture image
 `ghcr.io/adusak/dumpbox:latest`. Set `DUMPBOX_VERSION` to pin a released tag,
 for example `DUMPBOX_VERSION=1.0.0`, or run `docker compose up -d --build` to
-build the image from this checkout instead.
+build the image from this checkout instead. The service binds only to
+`127.0.0.1:8080`, uses a read-only root filesystem, drops all capabilities,
+enables `no-new-privileges`, and applies memory and process limits.
 
 Terminate TLS at a reverse proxy and forward requests to port 8080. `BASE_URL`
 must be the public origin, without a path. OIDC discovery must be reachable when
 the application starts. Dumpbox sends `Strict-Transport-Security` itself when
 `BASE_URL` uses `https`; the proxy should also redirect HTTP to HTTPS and apply
 request-rate and minimum-transfer-rate limits.
+Configure the proxy to terminate uploads that fall below the minimum transfer
+rate or exceed its request-body timeout; Dumpbox deliberately has no
+application-level upload deadline so large legitimate uploads can stream.
 
 ## Configuration
 
@@ -54,21 +59,29 @@ request-rate and minimum-transfer-rate limits.
 | `OIDC_ALLOW_INSECURE_ISSUER` | no | `false` | Allows a plaintext `http` issuer, and only when its host is loopback |
 | `MAX_REQUEST_BYTES` | no | `5368709120` (5 GiB) | Maximum bytes accepted per upload request |
 | `MAX_FILE_BYTES` | no | `5368709120` (5 GiB) | Maximum bytes accepted per file |
+| `MAX_BYTES_PER_USER` | no | `21474836480` (20 GiB) | Cumulative storage allowed per OIDC identity; `0` disables this limit |
 | `MAX_FILES_PER_REQUEST` | no | `100` | Maximum files accepted per upload request |
 | `MAX_CONCURRENT_UPLOADS_PER_USER` | no | `4` | Concurrent uploads allowed per user |
 | `MAX_CONCURRENT_UPLOADS` | no | `32` | Concurrent uploads allowed across all users |
 
 `OIDC_ISSUER_URL` must be an absolute `https` URL without userinfo, query, or
-fragment. Requests over the limits are rejected with `413`, and requests over the
-concurrency caps with `429`. These application limits do not replace storage
-quotas: the service enforces no per-user disk quota, so also apply filesystem
-quotas or volume size limits to the data directory.
+fragment. Requests over the per-request limits are rejected with `413`, users
+over their cumulative storage limit with `507`, and requests over the concurrency
+caps with `429`. Dumpbox rebuilds per-identity usage from `DATA_DIR` at startup,
+so this limit works regardless of where the directory is stored and does not
+require filesystem quotas. A volume size limit is still recommended to protect
+against aggregate use by many identities.
 
 The OIDC scopes are `openid profile email`. User folder names include a sanitized
 `preferred_username` followed by a hash of the immutable OIDC `sub` claim. If
 `preferred_username` is unavailable, only the hash is used. Files are written
 with `0600` permissions, user folders with `0700`, and duplicate filenames
 receive a numeric suffix instead of overwriting existing data.
+
+Dumpbox treats every identity that the configured OIDC client authenticates as
+authorized to upload. Restrict assignment to that client in the identity
+provider, for example to the intended access group, and disable public or
+unrestricted client access. Dumpbox does not independently inspect group claims.
 
 ## Build and test
 
@@ -107,21 +120,26 @@ start there; updating the documentation is part of every change.
 The installer creates a passwordless, unprivileged Debian LXC with automatic
 root login on its Proxmox console, installs the latest verified Dumpbox release,
 configures a dedicated system user and hardened systemd unit, and starts the
-service. Run this command as `root` in the Proxmox VE shell:
+service. Release scripts and archives are signed with Sigstore keyless signing.
+Install `cosign`, choose a release, download and verify the Proxmox script, then
+run it as `root` in the Proxmox VE shell:
 
 ```sh
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/adusak/Dumpbox/main/scripts/proxmox-lxc.sh)"
+VERSION=v1.0.0
+REPOSITORY=adusak/Dumpbox
+RELEASE_URL="https://github.com/${REPOSITORY}/releases/download/${VERSION}"
+curl -fLO "${RELEASE_URL}/proxmox-lxc.sh"
+curl -fLO "${RELEASE_URL}/proxmox-lxc.sh.sigstore.json"
+cosign verify-blob \
+  --bundle proxmox-lxc.sh.sigstore.json \
+  --certificate-identity "https://github.com/${REPOSITORY}/.github/workflows/release.yml@refs/tags/${VERSION}" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  proxmox-lxc.sh
+DUMPBOX_VERSION="$VERSION" bash proxmox-lxc.sh
 ```
 
-> [!WARNING]
-> This bootstrap command, and the `update` command it installs, download a
-> script from the mutable `main` branch and execute it as `root` on the Proxmox
-> host or in the container. TLS authenticates GitHub, but it does not bind the
-> content to a reviewed revision, so a compromise of the repository, a
-> maintainer account, or the delivery path at that moment becomes root command
-> execution. Review the script before running it, or replace `main` with a
-> commit SHA you have reviewed, and set `DUMPBOX_INSTALLER_URL` for `update` to
-> the same pinned revision.
+The certificate identity pins signatures to this repository's release workflow
+and the selected tag. Do not execute a script if verification fails.
 
 The script prompts for the container resources, an optional IPv4 address in
 CIDR notation, and required OIDC settings. It uses DHCP on `vmbr0` when the
@@ -136,7 +154,7 @@ BASE_URL=https://dumpbox.example \
 OIDC_ISSUER_URL=https://identity.example \
 OIDC_CLIENT_ID=dumpbox \
 OIDC_CLIENT_SECRET=replace-me \
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/adusak/Dumpbox/main/scripts/proxmox-lxc.sh)"
+DUMPBOX_VERSION="$VERSION" bash proxmox-lxc.sh
 ```
 
 Register `${BASE_URL}/auth/callback` with the OIDC provider. Terminate TLS at a
@@ -156,18 +174,24 @@ the latest release from inside the container, run:
 update
 ```
 
-The update command preserves existing configuration, verifies the release
-checksum, and restarts the service. Existing installations can add the command
-by rerunning the Linux installer once.
+The update command preserves existing configuration, resolves a release tag,
+downloads the installer from that immutable release, verifies its Sigstore
+bundle and the signed release archive, and restarts the service. Set
+`DUMPBOX_VERSION=v1.2.3 update` to select an exact release. Existing installations
+can add the command by running a verified Linux installer once.
 
 The Linux installer also works on an existing systemd-based AMD64 or ARM64
-Debian/Ubuntu host.
+Debian/Ubuntu host. Download `install.sh` and `install.sh.sigstore.json` from the
+chosen release and verify them with the same `cosign verify-blob` command and
+certificate identity before running the installer.
 
 ## Releases
 
 Pushing a semantic version tag builds static Linux AMD64 and ARM64 archives,
-generates SHA-256 checksums, publishes a GitHub release, and pushes a
-multi-architecture container image to GitHub Container Registry:
+generates SHA-256 checksums, signs every archive, checksum file, and installer
+with Sigstore keyless signing, publishes the files and verification bundles in a
+GitHub release, and pushes a multi-architecture container image to GitHub
+Container Registry:
 
 ```sh
 git tag v1.0.0

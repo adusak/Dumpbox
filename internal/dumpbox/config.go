@@ -14,6 +14,7 @@ import (
 const (
 	defaultMaxRequestBytes    = 5 << 30
 	defaultMaxFileBytes       = 5 << 30
+	defaultMaxBytesPerUser    = 20 << 30
 	defaultMaxFilesPerRequest = 100
 	defaultUploadsPerSubject  = 4
 	defaultUploadsTotal       = 32
@@ -30,6 +31,7 @@ type Config struct {
 	SessionKey         []byte
 	MaxRequestBytes    int64
 	MaxFileBytes       int64
+	MaxBytesPerUser    int64
 	MaxFilesPerRequest int
 	MaxUploadsPerUser  int
 	MaxUploadsTotal    int
@@ -73,6 +75,9 @@ func LoadConfig() (Config, error) {
 		return Config{}, err
 	}
 	if config.MaxFileBytes, err = envBytes("MAX_FILE_BYTES", defaultMaxFileBytes); err != nil {
+		return Config{}, err
+	}
+	if config.MaxBytesPerUser, err = envOptionalBytes("MAX_BYTES_PER_USER", defaultMaxBytesPerUser); err != nil {
 		return Config{}, err
 	}
 	if config.MaxFilesPerRequest, err = envCount("MAX_FILES_PER_REQUEST", defaultMaxFilesPerRequest); err != nil {
@@ -127,6 +132,18 @@ func envBytes(name string, fallback int64) (int64, error) {
 	value, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || value < 1 {
 		return 0, fmt.Errorf("%s must be a positive number of bytes", name)
+	}
+	return value, nil
+}
+
+func envOptionalBytes(name string, fallback int64) (int64, error) {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value < 0 {
+		return 0, fmt.Errorf("%s must be a non-negative number of bytes", name)
 	}
 	return value, nil
 }

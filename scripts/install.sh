@@ -47,7 +47,7 @@ write_environment_value() {
 }
 
 [[ $EUID -eq 0 ]] || fail "run this installer as root"
-for command in curl sha256sum tar install systemctl useradd groupadd getent openssl; do
+for command in cosign curl sha256sum tar install systemctl useradd groupadd getent openssl; do
   require_command "$command"
 done
 
@@ -76,6 +76,23 @@ curl -fL --retry 3 --retry-delay 2 -o "${temporary_dir}/${archive}" \
   "${download_url}/${archive}"
 curl -fL --retry 3 --retry-delay 2 -o "${temporary_dir}/checksums.txt" \
   "${download_url}/checksums.txt"
+curl -fL --retry 3 --retry-delay 2 -o "${temporary_dir}/${archive}.sigstore.json" \
+  "${download_url}/${archive}.sigstore.json"
+curl -fL --retry 3 --retry-delay 2 -o "${temporary_dir}/checksums.txt.sigstore.json" \
+  "${download_url}/checksums.txt.sigstore.json"
+curl -fL --retry 3 --retry-delay 2 -o "${temporary_dir}/update.sh" \
+  "${download_url}/update.sh"
+curl -fL --retry 3 --retry-delay 2 -o "${temporary_dir}/update.sh.sigstore.json" \
+  "${download_url}/update.sh.sigstore.json"
+
+certificate_identity="https://github.com/${REPOSITORY}/.github/workflows/release.yml@refs/tags/${version}"
+for asset in "$archive" checksums.txt update.sh; do
+  cosign verify-blob \
+    --bundle "${temporary_dir}/${asset}.sigstore.json" \
+    --certificate-identity "$certificate_identity" \
+    --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+    "${temporary_dir}/${asset}"
+done
 
 (
   cd "$temporary_dir"
@@ -96,20 +113,7 @@ fi
 install -d -m 0750 -o root -g dumpbox "$CONFIG_DIR"
 install -d -m 0700 -o dumpbox -g dumpbox "$DATA_DIR"
 install -m 0755 "${temporary_dir}/dumpbox" "${INSTALL_DIR}/dumpbox"
-cat >"${temporary_dir}/update" <<'EOF'
-#!/usr/bin/env bash
-set -Eeuo pipefail
-
-readonly INSTALLER_URL="${DUMPBOX_INSTALLER_URL:-https://raw.githubusercontent.com/adusak/Dumpbox/main/scripts/install.sh}"
-
-[[ $EUID -eq 0 ]] || {
-  echo "Error: run update as root" >&2
-  exit 1
-}
-
-curl -fsSL "$INSTALLER_URL" | bash
-EOF
-install -m 0755 "${temporary_dir}/update" "$UPDATE_COMMAND"
+install -m 0755 "${temporary_dir}/update.sh" "$UPDATE_COMMAND"
 
 if [[ ! -f "$CONFIG_FILE" || "${DUMPBOX_RECONFIGURE:-false}" == "true" ]]; then
   prompt_value BASE_URL "Public URL (for example, https://dumpbox.example.com)"
