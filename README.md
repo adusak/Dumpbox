@@ -95,6 +95,13 @@ allowing operators to correlate usage without exporting usernames. The metrics
 endpoint is unauthenticated for Prometheus scraping; restrict the metrics port
 to the monitoring network because it exposes operational data.
 
+## Contributing
+
+[`AGENTS.md`](AGENTS.md) describes the project vision, goals and non-goals,
+repository layout, request flow, coding conventions, and the checks to run
+before opening a pull request. AI assistants and human contributors should both
+start there; updating the documentation is part of every change.
+
 ## Install in a Proxmox LXC
 
 The installer creates a passwordless, unprivileged Debian LXC with automatic
