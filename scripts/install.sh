@@ -47,9 +47,15 @@ write_environment_value() {
 }
 
 [[ $EUID -eq 0 ]] || fail "run this installer as root"
-for command in cosign curl sha256sum tar install systemctl useradd groupadd getent openssl; do
+for command in apt-cache apt-get curl sha256sum tar install systemctl useradd groupadd getent openssl; do
   require_command "$command"
 done
+
+apt-get update
+if apt-cache show cosign >/dev/null 2>&1; then
+  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends cosign
+fi
+require_command cosign
 
 case "$(uname -m)" in
   x86_64) arch="amd64" ;;
