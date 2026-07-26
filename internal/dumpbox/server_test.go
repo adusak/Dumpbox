@@ -155,6 +155,49 @@ func TestUploadStreamsToUserDirectory(t *testing.T) {
 	}
 }
 
+func TestMetricsReportPerUserUploads(t *testing.T) {
+	app := testServer(t)
+	if response := upload(t, app, "first.txt", []byte("12345")); response.Code != http.StatusCreated {
+		t.Fatalf("upload status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if response := upload(t, app, "second.txt", []byte("1234567")); response.Code != http.StatusCreated {
+		t.Fatalf("upload status = %d, body = %s", response.Code, response.Body.String())
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "https://dumpbox.example/metrics", nil)
+	response := httptest.NewRecorder()
+	app.MetricsHandler().ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("metrics status = %d, want %d", response.Code, http.StatusOK)
+	}
+	user := metricUserID(session{Subject: "subject-123"})
+	body := response.Body.String()
+	for _, metric := range []string{
+		`dumpbox_uploaded_files_total{user="` + user + `"} 2`,
+		`dumpbox_uploaded_bytes_total{user="` + user + `"} 12`,
+		`dumpbox_upload_requests_total{code="201",user="` + user + `"} 2`,
+		"dumpbox_upload_duration_seconds_count 2",
+		"dumpbox_active_uploads 0",
+	} {
+		if !strings.Contains(body, metric) {
+			t.Errorf("metrics response does not contain %q", metric)
+		}
+	}
+}
+
+func TestMetricsAreNotExposedOnApplicationHandler(t *testing.T) {
+	app := testServer(t)
+	request := httptest.NewRequest(http.MethodGet, "https://dumpbox.example/metrics", nil)
+	response := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(response, request)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusNotFound)
+	}
+}
+
 func TestUploadDoesNotOverwriteExistingFile(t *testing.T) {
 	app := testServer(t)
 	first := upload(t, app, "notes.txt", []byte("first"))
@@ -342,6 +385,7 @@ func testServer(t *testing.T) *Server {
 		page:         page,
 		landingPage:  landingPage,
 		logger:       slog.New(slog.NewTextHandler(io.Discard, nil)),
+		metrics:      newMetrics(),
 		now:          time.Now,
 	}
 }

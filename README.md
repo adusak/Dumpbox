@@ -49,6 +49,7 @@ request-rate and minimum-transfer-rate limits.
 | `SESSION_SECRET` | yes | | Base64-encoded signing key of at least 32 bytes |
 | `BASE_URL` | no | `http://localhost:8080` | Public application origin |
 | `LISTEN_ADDR` | no | `:8080` | HTTP listen address |
+| `METRICS_LISTEN_ADDR` | no | `:9090` | Prometheus metrics listen address |
 | `DATA_DIR` | no | `./data` | Root upload directory |
 | `OIDC_ALLOW_INSECURE_ISSUER` | no | `false` | Allows a plaintext `http` issuer, and only when its host is loopback |
 | `MAX_REQUEST_BYTES` | no | `5368709120` (5 GiB) | Maximum bytes accepted per upload request |
@@ -79,7 +80,27 @@ go vet ./...
 go build ./cmd/dumpbox
 ```
 
-The health endpoint is available at `GET /healthz`.
+The health endpoint is available at `GET /healthz` on the application port.
+Prometheus metrics are available at `GET /metrics` on the separate metrics
+listener (port 9090 by default), including Go and process metrics plus:
+
+- `dumpbox_uploaded_files_total{user}` and
+  `dumpbox_uploaded_bytes_total{user}` for successfully stored data;
+- `dumpbox_upload_requests_total{user,code}` for upload outcomes;
+- `dumpbox_upload_duration_seconds` and `dumpbox_active_uploads`.
+
+The `user` label is the first 24 hexadecimal characters of the SHA-256 hash of
+the immutable OIDC subject. It matches the suffix of that user's data directory,
+allowing operators to correlate usage without exporting usernames. The metrics
+endpoint is unauthenticated for Prometheus scraping; restrict the metrics port
+to the monitoring network because it exposes operational data.
+
+## Contributing
+
+[`AGENTS.md`](AGENTS.md) describes the project vision, goals and non-goals,
+repository layout, request flow, coding conventions, and the checks to run
+before opening a pull request. AI assistants and human contributors should both
+start there; updating the documentation is part of every change.
 
 ## Install in a Proxmox LXC
 

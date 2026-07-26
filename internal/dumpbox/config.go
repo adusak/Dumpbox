@@ -21,6 +21,7 @@ const (
 
 type Config struct {
 	ListenAddr         string
+	MetricsListenAddr  string
 	BaseURL            *url.URL
 	DataDir            string
 	OIDCIssuer         string
@@ -52,13 +53,14 @@ func LoadConfig() (Config, error) {
 	}
 
 	config := Config{
-		ListenAddr:   env("LISTEN_ADDR", ":8080"),
-		BaseURL:      baseURL,
-		DataDir:      env("DATA_DIR", "./data"),
-		OIDCIssuer:   strings.TrimSpace(os.Getenv("OIDC_ISSUER_URL")),
-		ClientID:     strings.TrimSpace(os.Getenv("OIDC_CLIENT_ID")),
-		ClientSecret: os.Getenv("OIDC_CLIENT_SECRET"),
-		SessionKey:   key,
+		ListenAddr:        env("LISTEN_ADDR", ":8080"),
+		MetricsListenAddr: env("METRICS_LISTEN_ADDR", ":9090"),
+		BaseURL:           baseURL,
+		DataDir:           env("DATA_DIR", "./data"),
+		OIDCIssuer:        strings.TrimSpace(os.Getenv("OIDC_ISSUER_URL")),
+		ClientID:          strings.TrimSpace(os.Getenv("OIDC_CLIENT_ID")),
+		ClientSecret:      os.Getenv("OIDC_CLIENT_SECRET"),
+		SessionKey:        key,
 	}
 	if config.OIDCIssuer == "" || config.ClientID == "" || config.ClientSecret == "" {
 		return Config{}, fmt.Errorf("OIDC_ISSUER_URL, OIDC_CLIENT_ID, and OIDC_CLIENT_SECRET are required")
