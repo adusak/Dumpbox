@@ -42,10 +42,24 @@ func main() {
 		IdleTimeout:       2 * time.Minute,
 		MaxHeaderBytes:    1 << 20,
 	}
+	metricsServer := &http.Server{
+		Addr:              config.MetricsListenAddr,
+		Handler:           app.MetricsHandler(),
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+		MaxHeaderBytes:    1 << 20,
+	}
 	go func() {
 		logger.Info("Dumpbox listening", "address", config.ListenAddr)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("serve", "error", err)
+			os.Exit(1)
+		}
+	}()
+	go func() {
+		logger.Info("Dumpbox metrics listening", "address", config.MetricsListenAddr)
+		if err := metricsServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("serve metrics", "error", err)
 			os.Exit(1)
 		}
 	}()
@@ -57,5 +71,8 @@ func main() {
 	defer cancelShutdown()
 	if err := server.Shutdown(shutdownContext); err != nil {
 		logger.Error("shutdown", "error", err)
+	}
+	if err := metricsServer.Shutdown(shutdownContext); err != nil {
+		logger.Error("shutdown metrics", "error", err)
 	}
 }

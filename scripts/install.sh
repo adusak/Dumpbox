@@ -125,6 +125,7 @@ if [[ ! -f "$CONFIG_FILE" || "${DUMPBOX_RECONFIGURE:-false}" == "true" ]]; then
     write_environment_value OIDC_CLIENT_SECRET "$OIDC_CLIENT_SECRET"
     write_environment_value SESSION_SECRET "$SESSION_SECRET"
     write_environment_value LISTEN_ADDR ":8080"
+    write_environment_value METRICS_LISTEN_ADDR ":9090"
     write_environment_value DATA_DIR "$DATA_DIR"
   } >"${temporary_dir}/dumpbox.env"
   install -m 0600 -o root -g root "${temporary_dir}/dumpbox.env" "$CONFIG_FILE"
