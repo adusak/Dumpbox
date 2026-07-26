@@ -1,7 +1,7 @@
 :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
 * { box-sizing: border-box; }
 body { margin: 0; min-height: 100vh; color: #f8fafc; background: #09090b; overflow-x: hidden; }
-body::before { content: ""; position: fixed; inset: -30%; z-index: -1; background: radial-gradient(circle at 30% 30%, #78350f66, transparent 25%), radial-gradient(circle at 70% 65%, #eab30844, transparent 25%); filter: blur(70px); }
+body::before { content: ""; position: fixed; inset: 0; z-index: -1; background: radial-gradient(circle at 30% 30%, #78350f66, transparent 35%), radial-gradient(circle at 70% 65%, #eab30844, transparent 35%); }
 header { display: flex; align-items: center; justify-content: space-between; padding: 24px clamp(24px, 5vw, 72px); }
 .brand { display: flex; align-items: center; gap: 12px; font-weight: 800; letter-spacing: -.03em; font-size: 20px; }
 .mark { width: 36px; height: 36px; border-radius: 12px; }
@@ -10,7 +10,7 @@ button { color: inherit; font: inherit; }
 .logout { border: 1px solid #ffffff1a; border-radius: 10px; background: #ffffff0a; padding: 8px 12px; cursor: pointer; }
 main { width: min(760px, calc(100% - 40px)); margin: clamp(40px, 8vh, 96px) auto; text-align: center; }
 .landing main { display: grid; place-items: center; min-height: calc(100vh - 108px); margin: 0 auto; padding-bottom: 80px; }
-.card { width: 100%; padding: clamp(48px, 9vw, 88px) 24px; border: 1px solid #ffffff20; border-radius: 28px; background: #18181b99; backdrop-filter: blur(24px); box-shadow: 0 30px 80px #0008; }
+.card { width: 100%; padding: clamp(48px, 9vw, 88px) 24px; border: 1px solid #ffffff20; border-radius: 28px; background: #18181be6; box-shadow: 0 30px 80px #0008; }
 .card .logo { width: min(320px, 80%); height: auto; margin: 0 auto 28px; display: block; }
 .card p { max-width: 500px; margin: 22px auto 36px; color: #a1a1aa; font-size: clamp(16px, 2vw, 19px); line-height: 1.6; }
 .login { display: inline-block; padding: 14px 24px; border-radius: 12px; color: #fff; background: linear-gradient(135deg, #78350f, #eab308); box-shadow: 0 16px 40px #92400e55; font-weight: 700; text-decoration: none; }
@@ -18,7 +18,7 @@ main { width: min(760px, calc(100% - 40px)); margin: clamp(40px, 8vh, 96px) auto
 .login:focus-visible { outline: 3px solid #fde047; outline-offset: 4px; }
 h1 { margin: 0; font-size: clamp(40px, 8vw, 74px); letter-spacing: -.06em; line-height: .98; }
 .lead { color: #a1a1aa; font-size: clamp(16px, 2vw, 19px); margin: 22px auto 40px; max-width: 520px; line-height: 1.6; }
-.drop { display: block; position: relative; padding: clamp(44px, 8vw, 76px) 24px; border: 1px solid #ffffff20; border-radius: 28px; background: #18181b99; backdrop-filter: blur(24px); box-shadow: 0 30px 80px #0008; transition: .2s ease; cursor: pointer; }
+.drop { display: block; position: relative; padding: clamp(44px, 8vw, 76px) 24px; border: 1px solid #ffffff20; border-radius: 28px; background: #18181be6; box-shadow: 0 30px 80px #0008; transition: .2s ease; cursor: pointer; }
 .drop::after { content: ""; position: absolute; inset: 8px; pointer-events: none; border: 1px dashed #ffffff24; border-radius: 21px; }
 .drop.dragging { border-color: #fde047; transform: scale(1.01); background: #2d2418cc; }
 .icon { width: 64px; height: 64px; margin: 0 auto 20px; display: grid; place-items: center; border-radius: 20px; background: linear-gradient(135deg, #78350f, #eab308); font-size: 30px; box-shadow: 0 16px 40px #92400e55; }
