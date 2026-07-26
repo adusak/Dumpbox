@@ -72,7 +72,7 @@ write_shell_value() {
 }
 
 [[ $EUID -eq 0 ]] || fail "run this script as root on a Proxmox VE host"
-for command in pveversion pvesh pct pveam pvesm cosign curl; do
+for command in pveversion pvesh pct pveam pvesm curl; do
   require_command "$command"
 done
 
@@ -189,8 +189,7 @@ trap cleanup EXIT
 echo "Waiting for container networking..."
 pct exec "$CTID" -- bash -c \
   'for attempt in {1..30}; do apt-get update && exit 0; sleep 2; done; exit 1'
-pct exec "$CTID" -- apt-get install -y --no-install-recommends ca-certificates curl openssl
-pct push "$CTID" "$(command -v cosign)" /usr/local/bin/cosign --perms 0755
+pct exec "$CTID" -- apt-get install -y --no-install-recommends ca-certificates cosign curl openssl
 
 configuration_file="$(mktemp)"
 chmod 600 "$configuration_file"

@@ -118,11 +118,11 @@ start there; updating the documentation is part of every change.
 ## Install in a Proxmox LXC
 
 The installer creates a passwordless, unprivileged Debian LXC with automatic
-root login on its Proxmox console, installs the latest verified Dumpbox release,
-configures a dedicated system user and hardened systemd unit, and starts the
-service. Release scripts and archives are signed with Sigstore keyless signing.
-Install `cosign`, choose a release, download and verify the Proxmox script, then
-run it as `root` in the Proxmox VE shell:
+root login on its Proxmox console, installs `cosign` and the latest verified
+Dumpbox release, configures a dedicated system user and hardened systemd unit,
+and starts the service. Release scripts and archives are signed with Sigstore
+keyless signing. Install `cosign` on the Proxmox host to verify the bootstrap
+script, choose a release, then run the script as `root` in the Proxmox VE shell:
 
 ```sh
 VERSION=v1.0.0
@@ -174,16 +174,19 @@ the latest release from inside the container, run:
 update
 ```
 
-The update command preserves existing configuration, resolves a release tag,
-downloads the installer from that immutable release, verifies its Sigstore
-bundle and the signed release archive, and restarts the service. Set
-`DUMPBOX_VERSION=v1.2.3 update` to select an exact release. Existing installations
-can add the command by running a verified Linux installer once.
+The update command preserves existing configuration, updates the distribution's
+`cosign` package when available, resolves a release tag, downloads the installer
+from that immutable release, verifies its Sigstore bundle and the signed release
+archive, and restarts the service. Set `DUMPBOX_VERSION=v1.2.3 update` to select
+an exact release. Existing installations can add the command by running a
+verified Linux installer once.
 
 The Linux installer also works on an existing systemd-based AMD64 or ARM64
 Debian/Ubuntu host. Download `install.sh` and `install.sh.sigstore.json` from the
 chosen release and verify them with the same `cosign verify-blob` command and
-certificate identity before running the installer.
+certificate identity before running the installer. The installer installs or
+updates `cosign` from the distribution when that package is available; otherwise
+an existing `cosign` installation remains required.
 
 ## Releases
 

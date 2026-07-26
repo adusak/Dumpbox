@@ -9,9 +9,15 @@ fail() {
 }
 
 [[ $EUID -eq 0 ]] || fail "run update as root"
-for command in cosign curl; do
+for command in apt-cache apt-get curl; do
   command -v "$command" >/dev/null 2>&1 || fail "required command not found: $command"
 done
+
+apt-get update
+if apt-cache show cosign >/dev/null 2>&1; then
+  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends cosign
+fi
+command -v cosign >/dev/null 2>&1 || fail "required command not found: cosign"
 
 version="${DUMPBOX_VERSION:-latest}"
 if [[ "$version" == "latest" ]]; then
