@@ -9,9 +9,7 @@ fail() {
 }
 
 [[ $EUID -eq 0 ]] || fail "run update as root"
-for command in curl; do
-  command -v "$command" >/dev/null 2>&1 || fail "required command not found: $command"
-done
+command -v curl >/dev/null 2>&1 || fail "required command not found: curl"
 
 version="${DUMPBOX_VERSION:-latest}"
 if [[ "$version" == "latest" ]]; then

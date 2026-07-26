@@ -121,7 +121,7 @@ The installer creates a passwordless, unprivileged Debian LXC with automatic
 root login on its Proxmox console, installs the selected Dumpbox release,
 configures a dedicated system user and hardened systemd unit, and starts the
 service. Choose a release, then run the script as `root` in the Proxmox VE
-shell:
+shell. Cosign is not required:
 
 ```sh
 VERSION=v1.0.0
