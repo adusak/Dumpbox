@@ -128,10 +128,11 @@ curl -fLO https://github.com/adusak/Dumpbox/releases/latest/download/proxmox-lxc
 bash proxmox-lxc.sh
 ```
 
-That is the complete LXC setup path; it does not install or require Cosign.
-Release assets are signed separately for operators who want to verify them
-before installation. To pin a version, download `proxmox-lxc.sh` from that
-version's release page and run it with `DUMPBOX_VERSION=v1.2.3`.
+That is the complete LXC setup path; no separate Cosign setup on the Proxmox
+host is required. Releases containing this installer also omit Cosign from the
+container. Release assets are signed separately for operators who want to
+verify them before installation. To pin a version, download `proxmox-lxc.sh`
+from that version's release page and run it with `DUMPBOX_VERSION=v1.2.3`.
 
 The script prompts for the container resources, an optional IPv4 address in
 CIDR notation, and required OIDC settings. It uses DHCP on `vmbr0` when the
@@ -190,7 +191,7 @@ To verify a downloaded installer, install Cosign on the machine where you
 download it and run:
 
 ```sh
-VERSION=v1.0.0
+VERSION=v1.0.6
 REPOSITORY=adusak/Dumpbox
 RELEASE_URL="https://github.com/${REPOSITORY}/releases/download/${VERSION}"
 curl -fLO "${RELEASE_URL}/install.sh"
