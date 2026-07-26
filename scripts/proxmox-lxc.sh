@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-readonly INSTALLER_URL="${DUMPBOX_INSTALLER_URL:-https://raw.githubusercontent.com/adusak/Dumpbox/main/scripts/install.sh}"
+readonly REPOSITORY="${DUMPBOX_REPOSITORY:-adusak/Dumpbox}"
 
 fail() {
   echo "Error: $*" >&2
@@ -72,9 +72,20 @@ write_shell_value() {
 }
 
 [[ $EUID -eq 0 ]] || fail "run this script as root on a Proxmox VE host"
-for command in pveversion pvesh pct pveam pvesm curl; do
+for command in pveversion pvesh pct pveam pvesm cosign curl; do
   require_command "$command"
 done
+
+version="${DUMPBOX_VERSION:-latest}"
+if [[ "$version" == "latest" ]]; then
+  release_url="$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
+    "https://github.com/${REPOSITORY}/releases/latest")"
+  version="${release_url##*/}"
+fi
+[[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] ||
+  fail "invalid release version: $version"
+readonly VERSION="$version"
+readonly DOWNLOAD_URL="https://github.com/${REPOSITORY}/releases/download/${VERSION}"
 
 default_ctid="$(pvesh get /cluster/nextid 2>/dev/null || true)"
 default_template_storage="$(pvesm status -content vztmpl | awk 'NR > 1 && $3 == "active" { print $1; exit }')"
@@ -179,6 +190,7 @@ echo "Waiting for container networking..."
 pct exec "$CTID" -- bash -c \
   'for attempt in {1..30}; do apt-get update && exit 0; sleep 2; done; exit 1'
 pct exec "$CTID" -- apt-get install -y --no-install-recommends ca-certificates curl openssl
+pct push "$CTID" "$(command -v cosign)" /usr/local/bin/cosign --perms 0755
 
 configuration_file="$(mktemp)"
 chmod 600 "$configuration_file"
@@ -187,19 +199,34 @@ chmod 600 "$configuration_file"
   write_shell_value OIDC_ISSUER_URL "$OIDC_ISSUER_URL"
   write_shell_value OIDC_CLIENT_ID "$OIDC_CLIENT_ID"
   write_shell_value OIDC_CLIENT_SECRET "$OIDC_CLIENT_SECRET"
-  [[ -z "${DUMPBOX_VERSION:-}" ]] || write_shell_value DUMPBOX_VERSION "$DUMPBOX_VERSION"
+  write_shell_value DUMPBOX_VERSION "$VERSION"
 } >"$configuration_file"
 
 pct push "$CTID" "$configuration_file" /root/dumpbox-install.env --perms 0600
 # The variables in this command are expanded inside the container.
 # shellcheck disable=SC2016
-pct exec "$CTID" -- env DUMPBOX_INSTALLER_URL="$INSTALLER_URL" bash -c '
+pct exec "$CTID" -- env \
+  DUMPBOX_REPOSITORY="$REPOSITORY" \
+  DUMPBOX_VERSION="$VERSION" \
+  DUMPBOX_DOWNLOAD_URL="$DOWNLOAD_URL" \
+  bash -c '
   set -Eeuo pipefail
   set -a
   source /root/dumpbox-install.env
   set +a
   trap "rm -f /root/dumpbox-install.env" EXIT
-  curl -fsSL "$DUMPBOX_INSTALLER_URL" | bash
+  temporary_dir="$(mktemp -d)"
+  trap "rm -rf \"$temporary_dir\" /root/dumpbox-install.env" EXIT
+  curl -fL --retry 3 --retry-delay 2 -o "$temporary_dir/install.sh" \
+    "$DUMPBOX_DOWNLOAD_URL/install.sh"
+  curl -fL --retry 3 --retry-delay 2 -o "$temporary_dir/install.sh.sigstore.json" \
+    "$DUMPBOX_DOWNLOAD_URL/install.sh.sigstore.json"
+  cosign verify-blob \
+    --bundle "$temporary_dir/install.sh.sigstore.json" \
+    --certificate-identity "https://github.com/$DUMPBOX_REPOSITORY/.github/workflows/release.yml@refs/tags/$DUMPBOX_VERSION" \
+    --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+    "$temporary_dir/install.sh"
+  bash "$temporary_dir/install.sh"
 '
 
 installation_complete=true

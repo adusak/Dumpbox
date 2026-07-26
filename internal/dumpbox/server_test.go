@@ -2,6 +2,7 @@ package dumpbox
 
 import (
 	"bytes"
+	"errors"
 	"html/template"
 	"io"
 	"log/slog"
@@ -167,6 +168,50 @@ func TestUploadDoesNotOverwriteExistingFile(t *testing.T) {
 	assertFileContent(t, filepath.Join(directory, "notes (1).txt"), "second")
 }
 
+func TestUploadRejectsCumulativeUserQuota(t *testing.T) {
+	app := testServer(t)
+	quota, err := newStorageQuota(app.dataDir, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.storageQuota = quota
+
+	first := upload(t, app, "first.txt", []byte("123456"))
+	second := upload(t, app, "second.txt", []byte("78901"))
+	if first.Code != http.StatusCreated {
+		t.Fatalf("first status = %d, body = %s", first.Code, first.Body.String())
+	}
+	if second.Code != http.StatusInsufficientStorage {
+		t.Fatalf("second status = %d, body = %s", second.Code, second.Body.String())
+	}
+	directory := filepath.Join(app.dataDir, userDirectory(session{Subject: "subject-123", Username: "alice"}))
+	if _, err := os.Stat(filepath.Join(directory, "second.txt")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("second file exists or stat failed unexpectedly: %v", err)
+	}
+}
+
+func TestStorageQuotaRebuildsExistingUsage(t *testing.T) {
+	dataDir := t.TempDir()
+	user := session{Subject: "subject-123", Username: "alice"}
+	directory := filepath.Join(dataDir, userDirectory(user))
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, "existing.txt"), []byte("123456"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	quota, err := newStorageQuota(dataDir, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if quota.reserve(user.Subject, 5) {
+		t.Fatal("quota accepted bytes beyond the rebuilt usage")
+	}
+	if !quota.reserve(user.Subject, 4) {
+		t.Fatal("quota rejected bytes at the exact limit")
+	}
+}
+
 func TestConcurrentUploadsDoNotOverwrite(t *testing.T) {
 	app := testServer(t)
 	var wait sync.WaitGroup
@@ -235,6 +280,20 @@ func TestUserDirectoryIncludesSanitizedUsername(t *testing.T) {
 	}
 }
 
+func TestSafeFilenameReplacesMisleadingCharacters(t *testing.T) {
+	tests := map[string]string{
+		"photo\u202egnp.exe": "photo_gnp.exe",
+		"\u200ereport.pdf":   "_report.pdf",
+		"-option":            "_option",
+		"normal.txt":         "normal.txt",
+	}
+	for input, want := range tests {
+		if got := safeFilename(input); got != want {
+			t.Errorf("safeFilename(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
 func TestSignerRejectsModifiedPayload(t *testing.T) {
 	s := signer{key: bytes.Repeat([]byte{7}, 32)}
 	value, err := s.sign(session{Subject: "alice", Name: "Alice", Expires: time.Now().Add(time.Hour).Unix()})
@@ -266,6 +325,34 @@ func TestBrandAssetsAreServed(t *testing.T) {
 		if body := response.Body.String(); !strings.Contains(body, "<svg") {
 			t.Fatalf("%s did not return SVG markup", path)
 		}
+	}
+}
+
+func TestApplicationAssetsAreServed(t *testing.T) {
+	app := testServer(t)
+	for path, contentType := range map[string]string{
+		"/assets/app.css": "text/css; charset=utf-8",
+		"/assets/app.js":  "text/javascript; charset=utf-8",
+	} {
+		request := httptest.NewRequest(http.MethodGet, "https://dumpbox.example"+path, nil)
+		response := httptest.NewRecorder()
+		app.Handler().ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("%s status = %d, want %d", path, response.Code, http.StatusOK)
+		}
+		if got := response.Header().Get("Content-Type"); got != contentType {
+			t.Fatalf("%s content-type = %q, want %q", path, got, contentType)
+		}
+	}
+}
+
+func TestCSPDoesNotAllowInlineCode(t *testing.T) {
+	app := testServer(t)
+	request := httptest.NewRequest(http.MethodGet, "https://dumpbox.example/", nil)
+	response := httptest.NewRecorder()
+	app.Handler().ServeHTTP(response, request)
+	if csp := response.Header().Get("Content-Security-Policy"); strings.Contains(csp, "'unsafe-inline'") {
+		t.Fatalf("Content-Security-Policy allows inline code: %s", csp)
 	}
 }
 
@@ -468,5 +555,16 @@ func TestValidateIssuer(t *testing.T) {
 		if (err == nil) != test.valid {
 			t.Errorf("validateIssuer(%q, %t) error = %v, want valid = %t", test.issuer, test.allowInsecure, err, test.valid)
 		}
+	}
+}
+
+func TestEnvOptionalBytes(t *testing.T) {
+	t.Setenv("MAX_BYTES_PER_USER", "0")
+	if got, err := envOptionalBytes("MAX_BYTES_PER_USER", 10); err != nil || got != 0 {
+		t.Fatalf("envOptionalBytes() = %d, %v; want 0, nil", got, err)
+	}
+	t.Setenv("MAX_BYTES_PER_USER", "-1")
+	if _, err := envOptionalBytes("MAX_BYTES_PER_USER", 10); err == nil {
+		t.Fatal("envOptionalBytes() accepted a negative value")
 	}
 }

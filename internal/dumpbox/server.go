@@ -38,6 +38,7 @@ type Server struct {
 	dataDir      string
 	limits       uploadLimits
 	uploadSlots  *uploadSlots
+	storageQuota *storageQuota
 	oauth        oauth2.Config
 	verifier     tokenVerifier
 	signer       signer
@@ -62,6 +63,10 @@ func NewServer(config Config, provider *oidc.Provider, logger *slog.Logger) (*Se
 	if logger == nil {
 		logger = slog.Default()
 	}
+	storageQuota, err := newStorageQuota(config.DataDir, config.MaxBytesPerUser)
+	if err != nil {
+		return nil, fmt.Errorf("calculate storage usage: %w", err)
+	}
 	return &Server{
 		baseURL: config.BaseURL,
 		dataDir: config.DataDir,
@@ -70,7 +75,8 @@ func NewServer(config Config, provider *oidc.Provider, logger *slog.Logger) (*Se
 			fileBytes:       config.MaxFileBytes,
 			filesPerRequest: config.MaxFilesPerRequest,
 		},
-		uploadSlots: newUploadSlots(config.MaxUploadsPerUser, config.MaxUploadsTotal),
+		uploadSlots:  newUploadSlots(config.MaxUploadsPerUser, config.MaxUploadsTotal),
+		storageQuota: storageQuota,
 		oauth: oauth2.Config{
 			ClientID:     config.ClientID,
 			ClientSecret: config.ClientSecret,
@@ -93,6 +99,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", s.health)
 	mux.HandleFunc("GET /favicon.svg", brandAsset("favicon.svg"))
 	mux.HandleFunc("GET /assets/logo.svg", brandAsset("logo.svg"))
+	mux.HandleFunc("GET /assets/app.css", staticAsset("app.css", "text/css; charset=utf-8"))
+	mux.HandleFunc("GET /assets/app.js", staticAsset("app.js", "text/javascript; charset=utf-8"))
 	mux.HandleFunc("GET /login", s.login)
 	mux.HandleFunc("GET /auth/callback", s.callback)
 	mux.HandleFunc("POST /logout", s.logout)
@@ -291,10 +299,18 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "Too many files in one upload."})
 			return
 		}
-		name, err := storePart(directory, part, s.limits.fileBytes)
+		name, err := storePart(directory, part, s.limits.fileBytes, func(bytes int64) bool {
+			return s.storageQuota.reserve(user.Subject, bytes)
+		}, func(bytes int64) {
+			s.storageQuota.release(user.Subject, bytes)
+		})
 		_ = part.Close()
 		if errors.Is(err, errTooLarge) {
 			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "The upload is larger than the configured limit."})
+			return
+		}
+		if errors.Is(err, errQuotaExceeded) {
+			writeJSON(w, http.StatusInsufficientStorage, map[string]string{"error": "Your storage quota has been reached."})
 			return
 		}
 		if err != nil {
@@ -312,13 +328,14 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 }
 
 var errTooLarge = errors.New("upload exceeds the configured limit")
+var errQuotaExceeded = errors.New("storage quota exceeded")
 
 func isRequestTooLarge(err error) bool {
 	var maxBytes *http.MaxBytesError
 	return errors.As(err, &maxBytes)
 }
 
-func storePart(directory string, part *multipart.Part, maxFileBytes int64) (name string, err error) {
+func storePart(directory string, part *multipart.Part, maxFileBytes int64, reserve func(int64) bool, release func(int64)) (name string, err error) {
 	name = safeFilename(part.FileName())
 	if name == "" {
 		return "", errors.New("invalid filename")
@@ -352,6 +369,16 @@ func storePart(directory string, part *multipart.Part, maxFileBytes int64) (name
 	if maxFileBytes > 0 && written > maxFileBytes {
 		return "", errTooLarge
 	}
+	if reserve != nil && !reserve(written) {
+		return "", errQuotaExceeded
+	}
+	reserved := reserve != nil
+	published := false
+	defer func() {
+		if reserved && !published && release != nil {
+			release(written)
+		}
+	}()
 	if err = temp.Sync(); err != nil {
 		return "", err
 	}
@@ -362,6 +389,7 @@ func storePart(directory string, part *multipart.Part, maxFileBytes int64) (name
 	if err != nil {
 		return "", err
 	}
+	published = true
 	if err = os.Remove(tempName); err != nil {
 		return "", err
 	}
@@ -389,7 +417,7 @@ func publishFile(directory, name, tempName string) (string, error) {
 func safeFilename(name string) string {
 	name = filepath.Base(strings.ReplaceAll(name, "\\", "/"))
 	name = strings.Map(func(r rune) rune {
-		if r < 32 || r == 127 || strings.ContainsRune(`<>:"/\|?*`, r) {
+		if r < 32 || r == 127 || unicode.Is(unicode.Cf, r) || strings.ContainsRune(`<>:"/\|?*`, r) {
 			return '_'
 		}
 		return r
@@ -397,6 +425,9 @@ func safeFilename(name string) string {
 	name = strings.Trim(name, " .")
 	if name == "" || name == "." {
 		return ""
+	}
+	if strings.HasPrefix(name, "-") {
+		name = "_" + name[1:]
 	}
 	const maxBytes = 220
 	if len(name) > maxBytes {
@@ -466,7 +497,7 @@ func originPort(origin *url.URL) string {
 
 func (s *Server) securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
