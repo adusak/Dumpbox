@@ -9,15 +9,9 @@ fail() {
 }
 
 [[ $EUID -eq 0 ]] || fail "run update as root"
-for command in apt-cache apt-get curl; do
+for command in curl; do
   command -v "$command" >/dev/null 2>&1 || fail "required command not found: $command"
 done
-
-apt-get update
-if apt-cache show cosign >/dev/null 2>&1; then
-  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends cosign
-fi
-command -v cosign >/dev/null 2>&1 || fail "required command not found: cosign"
 
 version="${DUMPBOX_VERSION:-latest}"
 if [[ "$version" == "latest" ]]; then
@@ -34,12 +28,5 @@ trap 'rm -rf "$temporary_dir"' EXIT
 
 curl -fL --retry 3 --retry-delay 2 -o "${temporary_dir}/install.sh" \
   "${download_url}/install.sh"
-curl -fL --retry 3 --retry-delay 2 -o "${temporary_dir}/install.sh.sigstore.json" \
-  "${download_url}/install.sh.sigstore.json"
-cosign verify-blob \
-  --bundle "${temporary_dir}/install.sh.sigstore.json" \
-  --certificate-identity "https://github.com/${REPOSITORY}/.github/workflows/release.yml@refs/tags/${version}" \
-  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-  "${temporary_dir}/install.sh"
 
 DUMPBOX_VERSION="$version" bash "${temporary_dir}/install.sh"

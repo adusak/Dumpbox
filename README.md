@@ -118,28 +118,18 @@ start there; updating the documentation is part of every change.
 ## Install in a Proxmox LXC
 
 The installer creates a passwordless, unprivileged Debian LXC with automatic
-root login on its Proxmox console, installs `cosign` and the latest verified
-Dumpbox release, configures a dedicated system user and hardened systemd unit,
-and starts the service. Release scripts and archives are signed with Sigstore
-keyless signing. Install `cosign` on the Proxmox host to verify the bootstrap
-script, choose a release, then run the script as `root` in the Proxmox VE shell:
+root login on its Proxmox console, installs the selected Dumpbox release,
+configures a dedicated system user and hardened systemd unit, and starts the
+service. Choose a release, then run the script as `root` in the Proxmox VE
+shell:
 
 ```sh
 VERSION=v1.0.0
 REPOSITORY=adusak/Dumpbox
 RELEASE_URL="https://github.com/${REPOSITORY}/releases/download/${VERSION}"
 curl -fLO "${RELEASE_URL}/proxmox-lxc.sh"
-curl -fLO "${RELEASE_URL}/proxmox-lxc.sh.sigstore.json"
-cosign verify-blob \
-  --bundle proxmox-lxc.sh.sigstore.json \
-  --certificate-identity "https://github.com/${REPOSITORY}/.github/workflows/release.yml@refs/tags/${VERSION}" \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  proxmox-lxc.sh
 DUMPBOX_VERSION="$VERSION" bash proxmox-lxc.sh
 ```
-
-The certificate identity pins signatures to this repository's release workflow
-and the selected tag. Do not execute a script if verification fails.
 
 The script prompts for the container resources, an optional IPv4 address in
 CIDR notation, and required OIDC settings. It uses DHCP on `vmbr0` when the
@@ -174,27 +164,22 @@ the latest release from inside the container, run:
 update
 ```
 
-The update command preserves existing configuration, updates the distribution's
-`cosign` package when available, resolves a release tag, downloads the installer
-from that immutable release, verifies its Sigstore bundle and the signed release
-archive, and restarts the service. Set `DUMPBOX_VERSION=v1.2.3 update` to select
-an exact release. Existing installations can add the command by running a
-verified Linux installer once.
+The update command preserves existing configuration, resolves a release tag,
+downloads the installer from that release, validates the release archive
+against its published SHA-256 checksum, and restarts the service. Set
+`DUMPBOX_VERSION=v1.2.3 update` to select an exact release. Existing
+installations can add the command by running the Linux installer once.
 
 The Linux installer also works on an existing systemd-based AMD64 or ARM64
-Debian/Ubuntu host. Download `install.sh` and `install.sh.sigstore.json` from the
-chosen release and verify them with the same `cosign verify-blob` command and
-certificate identity before running the installer. The installer installs or
-updates `cosign` from the distribution when that package is available; otherwise
-an existing `cosign` installation remains required.
+Debian/Ubuntu host. Download `install.sh` from the chosen release and run it as
+root with `DUMPBOX_VERSION` set to that release tag.
 
 ## Releases
 
 Pushing a semantic version tag builds static Linux AMD64 and ARM64 archives,
-generates SHA-256 checksums, signs every archive, checksum file, and installer
-with Sigstore keyless signing, publishes the files and verification bundles in a
-GitHub release, and pushes a multi-architecture container image to GitHub
-Container Registry:
+generates SHA-256 checksums, publishes the archives and installers in a GitHub
+release, and pushes a multi-architecture container image to GitHub Container
+Registry:
 
 ```sh
 git tag v1.0.0
