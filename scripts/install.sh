@@ -47,15 +47,9 @@ write_environment_value() {
 }
 
 [[ $EUID -eq 0 ]] || fail "run this installer as root"
-for command in apt-cache apt-get curl sha256sum tar install systemctl useradd groupadd getent openssl; do
+for command in curl sha256sum tar install systemctl useradd groupadd getent openssl; do
   require_command "$command"
 done
-
-apt-get update
-if apt-cache show cosign >/dev/null 2>&1; then
-  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends cosign
-fi
-require_command cosign
 
 case "$(uname -m)" in
   x86_64) arch="amd64" ;;
@@ -82,23 +76,8 @@ curl -fL --retry 3 --retry-delay 2 -o "${temporary_dir}/${archive}" \
   "${download_url}/${archive}"
 curl -fL --retry 3 --retry-delay 2 -o "${temporary_dir}/checksums.txt" \
   "${download_url}/checksums.txt"
-curl -fL --retry 3 --retry-delay 2 -o "${temporary_dir}/${archive}.sigstore.json" \
-  "${download_url}/${archive}.sigstore.json"
-curl -fL --retry 3 --retry-delay 2 -o "${temporary_dir}/checksums.txt.sigstore.json" \
-  "${download_url}/checksums.txt.sigstore.json"
 curl -fL --retry 3 --retry-delay 2 -o "${temporary_dir}/update.sh" \
   "${download_url}/update.sh"
-curl -fL --retry 3 --retry-delay 2 -o "${temporary_dir}/update.sh.sigstore.json" \
-  "${download_url}/update.sh.sigstore.json"
-
-certificate_identity="https://github.com/${REPOSITORY}/.github/workflows/release.yml@refs/tags/${version}"
-for asset in "$archive" checksums.txt update.sh; do
-  cosign verify-blob \
-    --bundle "${temporary_dir}/${asset}.sigstore.json" \
-    --certificate-identity "$certificate_identity" \
-    --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-    "${temporary_dir}/${asset}"
-done
 
 (
   cd "$temporary_dir"

@@ -189,7 +189,7 @@ trap cleanup EXIT
 echo "Waiting for container networking..."
 pct exec "$CTID" -- bash -c \
   'for attempt in {1..30}; do apt-get update && exit 0; sleep 2; done; exit 1'
-pct exec "$CTID" -- apt-get install -y --no-install-recommends ca-certificates cosign curl openssl
+pct exec "$CTID" -- apt-get install -y --no-install-recommends ca-certificates curl openssl
 
 configuration_file="$(mktemp)"
 chmod 600 "$configuration_file"
@@ -218,13 +218,6 @@ pct exec "$CTID" -- env \
   trap "rm -rf \"$temporary_dir\" /root/dumpbox-install.env" EXIT
   curl -fL --retry 3 --retry-delay 2 -o "$temporary_dir/install.sh" \
     "$DUMPBOX_DOWNLOAD_URL/install.sh"
-  curl -fL --retry 3 --retry-delay 2 -o "$temporary_dir/install.sh.sigstore.json" \
-    "$DUMPBOX_DOWNLOAD_URL/install.sh.sigstore.json"
-  cosign verify-blob \
-    --bundle "$temporary_dir/install.sh.sigstore.json" \
-    --certificate-identity "https://github.com/$DUMPBOX_REPOSITORY/.github/workflows/release.yml@refs/tags/$DUMPBOX_VERSION" \
-    --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-    "$temporary_dir/install.sh"
   bash "$temporary_dir/install.sh"
 '
 
