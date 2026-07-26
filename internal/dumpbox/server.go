@@ -342,9 +342,7 @@ func storePart(directory string, part *multipart.Part, maxFileBytes int64) (name
 	tempName := temp.Name()
 	defer func() {
 		_ = temp.Close()
-		if err != nil {
-			_ = os.Remove(tempName)
-		}
+		_ = os.Remove(tempName)
 	}()
 	if err = temp.Chmod(0o600); err != nil {
 		return "", 0, err
@@ -372,9 +370,6 @@ func storePart(directory string, part *multipart.Part, maxFileBytes int64) (name
 	}
 	name, err = publishFile(directory, name, tempName)
 	if err != nil {
-		return "", 0, err
-	}
-	if err = os.Remove(tempName); err != nil {
 		return "", 0, err
 	}
 	return name, written, nil

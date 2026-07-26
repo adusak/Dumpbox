@@ -242,6 +242,35 @@ func TestConcurrentUploadsDoNotOverwrite(t *testing.T) {
 	}
 }
 
+func TestStorePartCleansUpAfterPanic(t *testing.T) {
+	directory := t.TempDir()
+	body := "--boundary\r\n" +
+		"Content-Disposition: form-data; name=\"file\"; filename=\"report.txt\"\r\n" +
+		"Content-Type: text/plain\r\n\r\npartial"
+	reader := multipart.NewReader(&panicReader{data: []byte(body)}, "boundary")
+	part, err := reader.NextPart()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Fatal("storePart did not panic")
+			}
+		}()
+		_, _, _ = storePart(directory, part, defaultMaxFileBytes)
+	}()
+
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("directory entries = %d, want no partial file", len(entries))
+	}
+}
+
 func TestUploadRejectsCrossOriginRequest(t *testing.T) {
 	app := testServer(t)
 	request := httptest.NewRequest(http.MethodPost, "https://dumpbox.example/upload", strings.NewReader("ignored"))
@@ -398,6 +427,19 @@ func upload(t testing.TB, app *Server, filename string, content []byte) *httptes
 	response := httptest.NewRecorder()
 	app.Handler().ServeHTTP(response, request)
 	return response
+}
+
+type panicReader struct {
+	data []byte
+}
+
+func (r *panicReader) Read(buffer []byte) (int, error) {
+	if len(r.data) == 0 {
+		panic("incomplete transfer")
+	}
+	n := copy(buffer, r.data)
+	r.data = r.data[n:]
+	return n, nil
 }
 
 func assertFileContent(t *testing.T, path, expected string) {
