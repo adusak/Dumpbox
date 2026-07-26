@@ -13,6 +13,7 @@ services:
     pids_limit: 100
     ports:
       - "127.0.0.1:8080:8080"
+      - "127.0.0.1:9090:9090"
     environment:
       BASE_URL: ${BASE_URL:-http://localhost:8080}
       OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:?set OIDC_ISSUER_URL}

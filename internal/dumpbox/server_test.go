@@ -156,6 +156,49 @@ func TestUploadStreamsToUserDirectory(t *testing.T) {
 	}
 }
 
+func TestMetricsReportPerUserUploads(t *testing.T) {
+	app := testServer(t)
+	if response := upload(t, app, "first.txt", []byte("12345")); response.Code != http.StatusCreated {
+		t.Fatalf("upload status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if response := upload(t, app, "second.txt", []byte("1234567")); response.Code != http.StatusCreated {
+		t.Fatalf("upload status = %d, body = %s", response.Code, response.Body.String())
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "https://dumpbox.example/metrics", nil)
+	response := httptest.NewRecorder()
+	app.MetricsHandler().ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("metrics status = %d, want %d", response.Code, http.StatusOK)
+	}
+	user := metricUserID(session{Subject: "subject-123"})
+	body := response.Body.String()
+	for _, metric := range []string{
+		`dumpbox_uploaded_files_total{user="` + user + `"} 2`,
+		`dumpbox_uploaded_bytes_total{user="` + user + `"} 12`,
+		`dumpbox_upload_requests_total{code="201",user="` + user + `"} 2`,
+		"dumpbox_upload_duration_seconds_count 2",
+		"dumpbox_active_uploads 0",
+	} {
+		if !strings.Contains(body, metric) {
+			t.Errorf("metrics response does not contain %q", metric)
+		}
+	}
+}
+
+func TestMetricsAreNotExposedOnApplicationHandler(t *testing.T) {
+	app := testServer(t)
+	request := httptest.NewRequest(http.MethodGet, "https://dumpbox.example/metrics", nil)
+	response := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(response, request)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusNotFound)
+	}
+}
+
 func TestUploadDoesNotOverwriteExistingFile(t *testing.T) {
 	app := testServer(t)
 	first := upload(t, app, "notes.txt", []byte("first"))
@@ -241,6 +284,35 @@ func TestConcurrentUploadsDoNotOverwrite(t *testing.T) {
 	}
 	if !contents["first"] || !contents["second"] {
 		t.Fatalf("stored contents = %v, want both uploads", contents)
+	}
+}
+
+func TestStorePartCleansUpAfterPanic(t *testing.T) {
+	directory := t.TempDir()
+	body := "--boundary\r\n" +
+		"Content-Disposition: form-data; name=\"file\"; filename=\"report.txt\"\r\n" +
+		"Content-Type: text/plain\r\n\r\npartial"
+	reader := multipart.NewReader(&panicReader{data: []byte(body)}, "boundary")
+	part, err := reader.NextPart()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Fatal("storePart did not panic")
+			}
+		}()
+		_, _, _ = storePart(directory, part, defaultMaxFileBytes, nil, nil)
+	}()
+
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("directory entries = %d, want no partial file", len(entries))
 	}
 }
 
@@ -400,6 +472,7 @@ func testServer(t *testing.T) *Server {
 		page:         page,
 		landingPage:  landingPage,
 		logger:       slog.New(slog.NewTextHandler(io.Discard, nil)),
+		metrics:      newMetrics(),
 		now:          time.Now,
 	}
 }
@@ -441,6 +514,19 @@ func upload(t testing.TB, app *Server, filename string, content []byte) *httptes
 	response := httptest.NewRecorder()
 	app.Handler().ServeHTTP(response, request)
 	return response
+}
+
+type panicReader struct {
+	data []byte
+}
+
+func (r *panicReader) Read(buffer []byte) (int, error) {
+	if len(r.data) == 0 {
+		panic("incomplete transfer")
+	}
+	n := copy(buffer, r.data)
+	r.data = r.data[n:]
+	return n, nil
 }
 
 func assertFileContent(t *testing.T, path, expected string) {

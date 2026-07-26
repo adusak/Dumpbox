@@ -13,6 +13,6 @@ COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certifica
 COPY --from=build --chown=65532:65532 /data /data
 COPY --from=build /dumpbox /dumpbox
 USER 65532:65532
-EXPOSE 8080
+EXPOSE 8080 9090
 ENV DATA_DIR=/data
 ENTRYPOINT ["/dumpbox"]
