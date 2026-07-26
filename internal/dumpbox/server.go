@@ -330,6 +330,26 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 var errTooLarge = errors.New("upload exceeds the configured limit")
 var errQuotaExceeded = errors.New("storage quota exceeded")
 
+type quotaWriter struct {
+	writer   io.Writer
+	reserve  func(int64) bool
+	release  func(int64)
+	reserved *int64
+}
+
+func (w quotaWriter) Write(data []byte) (int, error) {
+	bytes := int64(len(data))
+	if bytes > 0 && !w.reserve(bytes) {
+		return 0, errQuotaExceeded
+	}
+	written, err := w.writer.Write(data)
+	*w.reserved += int64(written)
+	if unwritten := bytes - int64(written); unwritten > 0 {
+		w.release(unwritten)
+	}
+	return written, err
+}
+
 func isRequestTooLarge(err error) bool {
 	var maxBytes *http.MaxBytesError
 	return errors.As(err, &maxBytes)
@@ -354,31 +374,35 @@ func storePart(directory string, part *multipart.Part, maxFileBytes int64, reser
 	if err = temp.Chmod(0o600); err != nil {
 		return "", err
 	}
+	var reserved int64
+	published := false
+	defer func() {
+		if reserved > 0 && !published && release != nil {
+			release(reserved)
+		}
+	}()
 	buffer := make([]byte, 256*1024)
 	var source io.Reader = part
 	if maxFileBytes > 0 {
 		source = io.LimitReader(part, maxFileBytes+1)
 	}
-	written, err := io.CopyBuffer(temp, source, buffer)
+	var destination io.Writer = temp
+	if reserve != nil && release != nil {
+		destination = quotaWriter{writer: temp, reserve: reserve, release: release, reserved: &reserved}
+	}
+	written, err := io.CopyBuffer(destination, source, buffer)
 	if err != nil {
 		if isRequestTooLarge(err) {
 			return "", errTooLarge
+		}
+		if errors.Is(err, errQuotaExceeded) {
+			return "", errQuotaExceeded
 		}
 		return "", err
 	}
 	if maxFileBytes > 0 && written > maxFileBytes {
 		return "", errTooLarge
 	}
-	if reserve != nil && !reserve(written) {
-		return "", errQuotaExceeded
-	}
-	reserved := reserve != nil
-	published := false
-	defer func() {
-		if reserved && !published && release != nil {
-			release(written)
-		}
-	}()
 	if err = temp.Sync(); err != nil {
 		return "", err
 	}
