@@ -121,15 +121,17 @@ The installer creates a passwordless, unprivileged Debian LXC with automatic
 root login on its Proxmox console, installs the selected Dumpbox release,
 configures a dedicated system user and hardened systemd unit, and starts the
 service. Choose a release, then run the script as `root` in the Proxmox VE
-shell. Cosign is not required:
+shell:
 
 ```sh
-VERSION=v1.0.0
-REPOSITORY=adusak/Dumpbox
-RELEASE_URL="https://github.com/${REPOSITORY}/releases/download/${VERSION}"
-curl -fLO "${RELEASE_URL}/proxmox-lxc.sh"
-DUMPBOX_VERSION="$VERSION" bash proxmox-lxc.sh
+curl -fLO https://github.com/adusak/Dumpbox/releases/latest/download/proxmox-lxc.sh
+bash proxmox-lxc.sh
 ```
+
+That is the complete LXC setup path; it does not install or require Cosign.
+Release assets are signed separately for operators who want to verify them
+before installation. To pin a version, download `proxmox-lxc.sh` from that
+version's release page and run it with `DUMPBOX_VERSION=v1.2.3`.
 
 The script prompts for the container resources, an optional IPv4 address in
 CIDR notation, and required OIDC settings. It uses DHCP on `vmbr0` when the
@@ -144,7 +146,7 @@ BASE_URL=https://dumpbox.example \
 OIDC_ISSUER_URL=https://identity.example \
 OIDC_CLIENT_ID=dumpbox \
 OIDC_CLIENT_SECRET=replace-me \
-DUMPBOX_VERSION="$VERSION" bash proxmox-lxc.sh
+DUMPBOX_VERSION=v1.2.3 bash proxmox-lxc.sh
 ```
 
 Register `${BASE_URL}/auth/callback` with the OIDC provider. Terminate TLS at a
@@ -171,25 +173,47 @@ against its published SHA-256 checksum, and restarts the service. Set
 installations can add the command by running the Linux installer once.
 
 The Linux installer also works on an existing systemd-based AMD64 or ARM64
-Debian/Ubuntu host. Download `install.sh` from the chosen release and run it as
-root with `DUMPBOX_VERSION` set to that release tag:
+Debian/Ubuntu host:
+
+```sh
+curl -fLO https://github.com/adusak/Dumpbox/releases/latest/download/install.sh
+sudo bash install.sh
+```
+
+The installer and `update` command do not require Cosign. Existing installations
+whose updater verifies Sigstore bundles remain compatible because releases
+continue to publish those bundles.
+
+### Optional release verification
+
+To verify a downloaded installer, install Cosign on the machine where you
+download it and run:
 
 ```sh
 VERSION=v1.0.0
-curl -fLO "https://github.com/adusak/Dumpbox/releases/download/${VERSION}/install.sh"
+REPOSITORY=adusak/Dumpbox
+RELEASE_URL="https://github.com/${REPOSITORY}/releases/download/${VERSION}"
+curl -fLO "${RELEASE_URL}/install.sh"
+curl -fLO "${RELEASE_URL}/install.sh.sigstore.json"
+cosign verify-blob \
+  --bundle install.sh.sigstore.json \
+  --certificate-identity "https://github.com/${REPOSITORY}/.github/workflows/release.yml@refs/tags/${VERSION}" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  install.sh
 sudo env DUMPBOX_VERSION="$VERSION" bash install.sh
 ```
 
-To upgrade an installation whose existing `update` command still expects
-Sigstore bundles, use this manual installation once; the newly installed
-`update` command no longer requires Cosign.
+The same command can verify `proxmox-lxc.sh` by downloading its matching bundle
+and replacing the filename in both places. Do not execute an asset if
+verification fails.
 
 ## Releases
 
 Pushing a semantic version tag builds static Linux AMD64 and ARM64 archives,
-generates SHA-256 checksums, publishes the archives and installers in a GitHub
-release, and pushes a multi-architecture container image to GitHub Container
-Registry:
+generates SHA-256 checksums, signs the archives, checksums, and installers with
+Sigstore keyless signing, publishes them and their verification bundles in a
+GitHub release, and pushes a multi-architecture container image to GitHub
+Container Registry:
 
 ```sh
 git tag v1.0.0
