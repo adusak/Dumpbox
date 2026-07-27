@@ -20,7 +20,7 @@ to operate.
 - **Users are isolated by folder.** Each user gets a stable, sanitized directory
   and files are never overwritten; duplicate names get a numeric suffix.
 - **Safe defaults.** Restrictive file modes, signed cookies, same-origin checks,
-  security headers, and explicit size and concurrency limits ship enabled.
+  security headers, and explicit byte, file-count, and concurrency limits ship enabled.
 - **Minimal dependencies.** The standard library first; a third-party module is
   added only when the alternative is hand-rolled security-sensitive code.
 - **Small surface.** A handful of routes, one binary, one configuration source
@@ -41,7 +41,7 @@ to operate.
 | `internal/dumpbox/config.go` | `Config` and `LoadConfig`; all environment variable parsing and validation |
 | `internal/dumpbox/server.go` | Routes, handlers, auth middleware, multipart upload streaming, filename and directory sanitizing, security headers |
 | `internal/dumpbox/session.go` | HMAC-signed session and auth-request cookie payloads |
-| `internal/dumpbox/limits.go` | Per-user and global concurrent upload slots |
+| `internal/dumpbox/limits.go` | Per-user byte/file quotas and concurrent upload slots |
 | `internal/dumpbox/hash.go` | Hash of the OIDC `sub` used in folder names |
 | `internal/dumpbox/page.go` | The single HTML page template |
 | `internal/dumpbox/assets.go`, `assets/` | Embedded logo and favicon |
@@ -118,5 +118,5 @@ Dumpbox accepts unauthenticated internet traffic on its login routes and
 authenticated file writes everywhere else, so review changes with that in mind:
 keep the same-origin check on state-changing requests, keep cookies `HttpOnly`
 and `SameSite`, keep constant-time comparison for secrets, keep the `0600`/`0700`
-file modes, and keep the size and concurrency limits enforced before any data is
+file modes, and keep the byte, file-count, and concurrency limits enforced before any data is
 written to disk.

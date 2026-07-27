@@ -61,16 +61,17 @@ application-level upload deadline so large legitimate uploads can stream.
 | `MAX_FILE_BYTES` | no | `5368709120` (5 GiB) | Maximum bytes accepted per file |
 | `MAX_BYTES_PER_USER` | no | `21474836480` (20 GiB) | Cumulative storage allowed per OIDC identity; `0` disables this limit |
 | `MAX_FILES_PER_REQUEST` | no | `100` | Maximum files accepted per upload request |
+| `MAX_FILES_PER_USER` | no | `10000` | Cumulative files allowed per OIDC identity |
 | `MAX_CONCURRENT_UPLOADS_PER_USER` | no | `4` | Concurrent uploads allowed per user |
 | `MAX_CONCURRENT_UPLOADS` | no | `32` | Concurrent uploads allowed across all users |
 
 `OIDC_ISSUER_URL` must be an absolute `https` URL without userinfo, query, or
 fragment. Requests over the per-request limits are rejected with `413`, users
-over their cumulative storage limit with `507`, and requests over the concurrency
-caps with `429`. Dumpbox rebuilds per-identity usage from `DATA_DIR` at startup,
-so this limit works regardless of where the directory is stored and does not
-require filesystem quotas. A volume size limit is still recommended to protect
-against aggregate use by many identities.
+over their cumulative byte or file-count limit with `507`, and requests over the
+concurrency caps with `429`. Dumpbox rebuilds both per-identity counters from
+`DATA_DIR` at startup, so these limits work regardless of where the directory is
+stored. Filesystem byte and inode quotas remain recommended as defense in depth
+and to protect against aggregate use by many identities.
 
 The OIDC scopes are `openid profile email`. User folder names include a sanitized
 `preferred_username` followed by a hash of the immutable OIDC `sub` claim. If

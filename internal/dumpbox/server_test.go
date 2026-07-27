@@ -2,6 +2,7 @@ package dumpbox
 
 import (
 	"bytes"
+	"encoding/base64"
 	"errors"
 	"html/template"
 	"io"
@@ -213,7 +214,7 @@ func TestUploadDoesNotOverwriteExistingFile(t *testing.T) {
 
 func TestUploadRejectsCumulativeUserQuota(t *testing.T) {
 	app := testServer(t)
-	quota, err := newStorageQuota(app.dataDir, 10)
+	quota, err := newStorageQuota(app.dataDir, 10, defaultMaxFilesPerUser)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,6 +234,73 @@ func TestUploadRejectsCumulativeUserQuota(t *testing.T) {
 	}
 }
 
+func TestUploadRejectsCumulativeUserFileQuota(t *testing.T) {
+	app := testServer(t)
+	quota, err := newStorageQuota(app.dataDir, 0, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.storageQuota = quota
+
+	first := upload(t, app, "first.txt", nil)
+	second := upload(t, app, "second.txt", nil)
+	if first.Code != http.StatusCreated {
+		t.Fatalf("first status = %d, body = %s", first.Code, first.Body.String())
+	}
+	if second.Code != http.StatusInsufficientStorage {
+		t.Fatalf("second status = %d, body = %s", second.Code, second.Body.String())
+	}
+	directory := filepath.Join(app.dataDir, userDirectory(session{Subject: "subject-123", Username: "alice"}))
+	if _, err := os.Stat(filepath.Join(directory, "second.txt")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("second file exists or stat failed unexpectedly: %v", err)
+	}
+}
+
+func TestFileQuotaReservationIsAtomic(t *testing.T) {
+	quota, err := newStorageQuota(t.TempDir(), 0, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const attempts = 100
+	results := make(chan bool, attempts)
+	var wait sync.WaitGroup
+	for range attempts {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			results <- quota.reserveFile("subject-123")
+		}()
+	}
+	wait.Wait()
+	close(results)
+	succeeded := 0
+	for result := range results {
+		if result {
+			succeeded++
+		}
+	}
+	if succeeded != 1 {
+		t.Fatalf("successful reservations = %d, want 1", succeeded)
+	}
+}
+
+func TestFailedUploadReleasesFileQuota(t *testing.T) {
+	app := testServer(t)
+	app.limits.fileBytes = 1
+	quota, err := newStorageQuota(app.dataDir, 0, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.storageQuota = quota
+
+	if response := upload(t, app, "too-large.txt", []byte("12")); response.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("failed upload status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if response := upload(t, app, "allowed.txt", nil); response.Code != http.StatusCreated {
+		t.Fatalf("upload after failure status = %d, body = %s", response.Code, response.Body.String())
+	}
+}
+
 func TestStorageQuotaRebuildsExistingUsage(t *testing.T) {
 	dataDir := t.TempDir()
 	user := session{Subject: "subject-123", Username: "alice"}
@@ -243,15 +311,18 @@ func TestStorageQuotaRebuildsExistingUsage(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(directory, "existing.txt"), []byte("123456"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	quota, err := newStorageQuota(dataDir, 10)
+	quota, err := newStorageQuota(dataDir, 10, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if quota.reserve(user.Subject, 5) {
+	if quota.reserveBytes(user.Subject, 5) {
 		t.Fatal("quota accepted bytes beyond the rebuilt usage")
 	}
-	if !quota.reserve(user.Subject, 4) {
+	if !quota.reserveBytes(user.Subject, 4) {
 		t.Fatal("quota rejected bytes at the exact limit")
+	}
+	if quota.reserveFile(user.Subject) {
+		t.Fatal("quota accepted a file beyond the rebuilt file count")
 	}
 }
 
@@ -304,7 +375,7 @@ func TestStorePartCleansUpAfterPanic(t *testing.T) {
 				t.Fatal("storePart did not panic")
 			}
 		}()
-		_, _, _ = storePart(directory, part, defaultMaxFileBytes, nil, nil)
+		_, _, _ = storePart(directory, part, defaultMaxFileBytes, nil, nil, nil, nil)
 	}()
 
 	entries, err := os.ReadDir(directory)
@@ -641,6 +712,26 @@ func TestValidateIssuer(t *testing.T) {
 		if (err == nil) != test.valid {
 			t.Errorf("validateIssuer(%q, %t) error = %v, want valid = %t", test.issuer, test.allowInsecure, err, test.valid)
 		}
+	}
+}
+
+func TestLoadConfigValidatesMaxFilesPerUser(t *testing.T) {
+	t.Setenv("OIDC_ISSUER_URL", "https://identity.example")
+	t.Setenv("OIDC_CLIENT_ID", "dumpbox")
+	t.Setenv("OIDC_CLIENT_SECRET", "client-secret")
+	t.Setenv("SESSION_SECRET", base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32)))
+	t.Setenv("MAX_FILES_PER_USER", "0")
+	if _, err := LoadConfig(); err == nil || !strings.Contains(err.Error(), "MAX_FILES_PER_USER") {
+		t.Fatalf("LoadConfig() error = %v, want MAX_FILES_PER_USER validation error", err)
+	}
+
+	t.Setenv("MAX_FILES_PER_USER", "123")
+	config, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.MaxFilesPerUser != 123 {
+		t.Fatalf("MaxFilesPerUser = %d, want 123", config.MaxFilesPerUser)
 	}
 }
 

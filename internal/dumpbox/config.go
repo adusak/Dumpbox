@@ -16,6 +16,7 @@ const (
 	defaultMaxFileBytes       = 5 << 30
 	defaultMaxBytesPerUser    = 20 << 30
 	defaultMaxFilesPerRequest = 100
+	defaultMaxFilesPerUser    = 10_000
 	defaultUploadsPerSubject  = 4
 	defaultUploadsTotal       = 32
 )
@@ -33,6 +34,7 @@ type Config struct {
 	MaxFileBytes       int64
 	MaxBytesPerUser    int64
 	MaxFilesPerRequest int
+	MaxFilesPerUser    int
 	MaxUploadsPerUser  int
 	MaxUploadsTotal    int
 }
@@ -81,6 +83,9 @@ func LoadConfig() (Config, error) {
 		return Config{}, err
 	}
 	if config.MaxFilesPerRequest, err = envCount("MAX_FILES_PER_REQUEST", defaultMaxFilesPerRequest); err != nil {
+		return Config{}, err
+	}
+	if config.MaxFilesPerUser, err = envCount("MAX_FILES_PER_USER", defaultMaxFilesPerUser); err != nil {
 		return Config{}, err
 	}
 	if config.MaxUploadsPerUser, err = envCount("MAX_CONCURRENT_UPLOADS_PER_USER", defaultUploadsPerSubject); err != nil {
