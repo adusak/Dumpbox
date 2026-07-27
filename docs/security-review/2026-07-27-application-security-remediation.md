@@ -1,7 +1,9 @@
 # Application security remediation review
 
-**Date:** 2026-07-27  
-**Scope:** Remediation of the Medium inode-exhaustion finding in `2026-07-27-application-security.md`.  
+**Date:** 2026-07-27
+
+**Scope:** Remediation of the Medium inode-exhaustion finding in `2026-07-27-application-security.md`.
+
 **Result:** Remediated.
 
 ## Remediation assessment
