@@ -49,6 +49,23 @@ func TestAuthenticatedUserSeesUploadPage(t *testing.T) {
 	}
 }
 
+func TestPagesShowVersion(t *testing.T) {
+	app := testServer(t)
+	for _, authenticated := range []bool{false, true} {
+		request := httptest.NewRequest(http.MethodGet, "https://dumpbox.example/", nil)
+		if authenticated {
+			request.AddCookie(&http.Cookie{Name: sessionCookie, Value: authenticatedCookie(t, app)})
+		}
+		response := httptest.NewRecorder()
+
+		app.Handler().ServeHTTP(response, request)
+
+		if body := response.Body.String(); !strings.Contains(body, "Dumpbox "+Version) {
+			t.Errorf("authenticated = %t: page does not contain version: %s", authenticated, body)
+		}
+	}
+}
+
 func TestTamperedSessionIsRejected(t *testing.T) {
 	app := testServer(t)
 	value := authenticatedCookie(t, app)

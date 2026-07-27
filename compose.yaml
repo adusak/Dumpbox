@@ -1,7 +1,10 @@
 services:
   dumpbox:
     image: ghcr.io/adusak/dumpbox:${DUMPBOX_VERSION:-latest}
-    build: .
+    build:
+      context: .
+      args:
+        VERSION: ${DUMPBOX_VERSION:-development}
     pull_policy: always
     restart: unless-stopped
     read_only: true
