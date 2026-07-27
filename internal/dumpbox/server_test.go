@@ -62,11 +62,8 @@ func TestPagesShowVersion(t *testing.T) {
 		app.Handler().ServeHTTP(response, request)
 
 		body := response.Body.String()
-		if !strings.Contains(body, `<span class="version">`+Version+`</span>`) {
-			t.Errorf("authenticated = %t: page header does not contain version: %s", authenticated, body)
-		}
-		if strings.Contains(body, "<footer") {
-			t.Errorf("authenticated = %t: page contains version footer: %s", authenticated, body)
+		if !strings.Contains(body, `<footer>Dumpbox `+Version+`</footer>`) {
+			t.Errorf("authenticated = %t: page footer does not contain version branding: %s", authenticated, body)
 		}
 	}
 }
