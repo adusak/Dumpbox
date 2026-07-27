@@ -101,7 +101,7 @@ Reference: [OWASP ASVS 5.0 V7 Session Management](https://github.com/OWASP/ASVS/
 - **Upload byte accounting:** `MaxBytesReader` wraps the request before multipart parsing; per-file copying reads at most `max+1`; quota reservations are mutex-protected and released on failures; startup accounting combines directories by subject-hash suffix.
 - **Secrets, crypto, and logs:** No tracked secret matched the review scan. Project code does not log tokens, cookies, client secrets, or file contents. Random values use `crypto/rand`; signatures use HMAC-SHA-256 and constant-time verification.
 - **Application dependencies:** `go mod verify` passed. Manual advisory research found no public advisory affecting the resolved versions of `go-oidc/v3 v3.20.0`, `x/oauth2 v0.36.0`, `go-jose/v4 v4.1.4`, or `prometheus/client_golang v1.24.1` as of the review date.
-- **Metrics:** The application handler explicitly returns 404 for `/metrics`; metrics use a fixed-length pseudonymous subject hash, avoiding attacker-controlled label cardinality and raw claim disclosure.
+- **Metrics:** The application handler explicitly returns 404 for `/metrics`; labels use a fixed-length pseudonymous subject hash instead of raw display claims. Series cardinality still follows the number of authenticated subjects and is therefore part of the IdP client-assignment assumption.
 
 ## Informational observations
 
