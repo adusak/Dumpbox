@@ -14,8 +14,8 @@ const landingHTML = `<!doctype html>
   <main>
     <section class="card">
       <img class="logo" src="/assets/logo.svg" alt="Dumpbox">
-      <h1>Your files.<br>Your space.</h1>
-      <p>Sign in securely to upload files directly to your private folder.</p>
+      <h1>Deliver files.<br>Securely.</h1>
+      <p>Sign in to send files directly to this server.</p>
       <a class="login" href="login">Sign in</a>
     </section>
   </main>
@@ -39,7 +39,7 @@ const indexHTML = `<!doctype html>
   </header>
   <main>
     <h1>Drop it here.</h1>
-    <p class="lead">A quiet place for your files. They stream straight to your private folder—no size surprises, no unnecessary copies.</p>
+    <p class="lead">Send files directly to this server. Uploads are authenticated and stream straight to their destination.</p>
     <label class="drop" id="drop">
       <input type="file" id="picker" multiple>
       <div class="icon">↑</div>
