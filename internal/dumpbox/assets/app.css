@@ -30,7 +30,12 @@ input { display: none; }
 .file { padding: 16px; border: 1px solid #ffffff14; border-radius: 16px; background: #18181bcc; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .filename { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 600; }
-.status { flex: 0 0 auto; color: #a1a1aa; font-size: 13px; }
+.result { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; }
+.status { color: #a1a1aa; font-size: 13px; }
+.retry { border: 1px solid #ffffff24; border-radius: 8px; background: #ffffff0a; padding: 5px 9px; cursor: pointer; font-size: 13px; }
+.retry:hover { border-color: #fde047; }
+.retry:focus-visible { outline: 2px solid #fde047; outline-offset: 2px; }
+.retry[hidden] { display: none; }
 .bar { height: 5px; margin-top: 12px; overflow: hidden; border-radius: 99px; background: #ffffff10; }
 .fill { width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #78350f, #eab308); transition: width .15s; }
 .done .status { color: #34d399; }
