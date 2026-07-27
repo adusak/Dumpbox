@@ -27,15 +27,19 @@ type uploadSlots struct {
 }
 
 type storageQuota struct {
-	mutex sync.Mutex
-	max   int64
-	used  map[string]int64
+	mutex    sync.Mutex
+	maxBytes int64
+	maxFiles int
+	bytes    map[string]int64
+	files    map[string]int
 }
 
-func newStorageQuota(dataDir string, max int64) (*storageQuota, error) {
-	quota := &storageQuota{max: max, used: make(map[string]int64)}
-	if max == 0 {
-		return quota, nil
+func newStorageQuota(dataDir string, maxBytes int64, maxFiles int) (*storageQuota, error) {
+	quota := &storageQuota{
+		maxBytes: maxBytes,
+		maxFiles: maxFiles,
+		bytes:    make(map[string]int64),
+		files:    make(map[string]int),
 	}
 	entries, err := os.ReadDir(dataDir)
 	if errors.Is(err, os.ErrNotExist) {
@@ -59,7 +63,8 @@ func newStorageQuota(dataDir string, max int64) (*storageQuota, error) {
 					return err
 				}
 				if info.Mode().IsRegular() {
-					quota.used[key] += info.Size()
+					quota.bytes[key] += info.Size()
+					quota.files[key]++
 				}
 			}
 			return nil
@@ -91,30 +96,57 @@ func quotaKeyFromDirectory(name string) (string, bool) {
 	return key, true
 }
 
-func (q *storageQuota) reserve(subject string, bytes int64) bool {
-	if q == nil || q.max == 0 {
+func (q *storageQuota) reserveBytes(subject string, bytes int64) bool {
+	if q == nil || q.maxBytes == 0 {
 		return true
 	}
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 	key := quotaKey(subject)
-	if bytes > q.max-q.used[key] {
+	if bytes > q.maxBytes-q.bytes[key] {
 		return false
 	}
-	q.used[key] += bytes
+	q.bytes[key] += bytes
 	return true
 }
 
-func (q *storageQuota) release(subject string, bytes int64) {
-	if q == nil || q.max == 0 {
+func (q *storageQuota) releaseBytes(subject string, bytes int64) {
+	if q == nil || q.maxBytes == 0 {
 		return
 	}
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 	key := quotaKey(subject)
-	q.used[key] -= bytes
-	if q.used[key] <= 0 {
-		delete(q.used, key)
+	q.bytes[key] -= bytes
+	if q.bytes[key] <= 0 {
+		delete(q.bytes, key)
+	}
+}
+
+func (q *storageQuota) reserveFile(subject string) bool {
+	if q == nil || q.maxFiles == 0 {
+		return true
+	}
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
+	key := quotaKey(subject)
+	if q.files[key] >= q.maxFiles {
+		return false
+	}
+	q.files[key]++
+	return true
+}
+
+func (q *storageQuota) releaseFile(subject string) {
+	if q == nil || q.maxFiles == 0 {
+		return
+	}
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
+	key := quotaKey(subject)
+	q.files[key]--
+	if q.files[key] <= 0 {
+		delete(q.files, key)
 	}
 }
 

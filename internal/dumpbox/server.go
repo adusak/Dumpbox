@@ -69,7 +69,7 @@ func NewServer(config Config, provider *oidc.Provider, logger *slog.Logger) (*Se
 	if logger == nil {
 		logger = slog.Default()
 	}
-	storageQuota, err := newStorageQuota(config.DataDir, config.MaxBytesPerUser)
+	storageQuota, err := newStorageQuota(config.DataDir, config.MaxBytesPerUser, config.MaxFilesPerUser)
 	if err != nil {
 		return nil, fmt.Errorf("calculate storage usage: %w", err)
 	}
@@ -315,10 +315,14 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "Too many files in one upload."})
 			return
 		}
-		name, written, err := storePart(directory, part, s.limits.fileBytes, func(bytes int64) bool {
-			return s.storageQuota.reserve(user.Subject, bytes)
+		name, written, err := storePart(directory, part, s.limits.fileBytes, func() bool {
+			return s.storageQuota.reserveFile(user.Subject)
+		}, func() {
+			s.storageQuota.releaseFile(user.Subject)
+		}, func(bytes int64) bool {
+			return s.storageQuota.reserveBytes(user.Subject, bytes)
 		}, func(bytes int64) {
-			s.storageQuota.release(user.Subject, bytes)
+			s.storageQuota.releaseBytes(user.Subject, bytes)
 		})
 		_ = part.Close()
 		if errors.Is(err, errTooLarge) {
@@ -372,11 +376,20 @@ func isRequestTooLarge(err error) bool {
 	return errors.As(err, &maxBytes)
 }
 
-func storePart(directory string, part *multipart.Part, maxFileBytes int64, reserve func(int64) bool, release func(int64)) (name string, written int64, err error) {
+func storePart(directory string, part *multipart.Part, maxFileBytes int64, reserveFile func() bool, releaseFile func(), reserveBytes func(int64) bool, releaseBytes func(int64)) (name string, written int64, err error) {
 	name = safeFilename(part.FileName())
 	if name == "" {
 		return "", 0, errors.New("invalid filename")
 	}
+	if reserveFile != nil && !reserveFile() {
+		return "", 0, errQuotaExceeded
+	}
+	published := false
+	defer func() {
+		if !published && releaseFile != nil {
+			releaseFile()
+		}
+	}()
 	temp, err := os.CreateTemp(directory, ".upload-*")
 	if err != nil {
 		return "", 0, err
@@ -390,10 +403,9 @@ func storePart(directory string, part *multipart.Part, maxFileBytes int64, reser
 		return "", 0, err
 	}
 	var reserved int64
-	published := false
 	defer func() {
-		if reserved > 0 && !published && release != nil {
-			release(reserved)
+		if reserved > 0 && !published && releaseBytes != nil {
+			releaseBytes(reserved)
 		}
 	}()
 	buffer := make([]byte, 256*1024)
@@ -402,8 +414,8 @@ func storePart(directory string, part *multipart.Part, maxFileBytes int64, reser
 		source = io.LimitReader(part, maxFileBytes+1)
 	}
 	var destination io.Writer = temp
-	if reserve != nil && release != nil {
-		destination = quotaWriter{writer: temp, reserve: reserve, release: release, reserved: &reserved}
+	if reserveBytes != nil && releaseBytes != nil {
+		destination = quotaWriter{writer: temp, reserve: reserveBytes, release: releaseBytes, reserved: &reserved}
 	}
 	written, err = io.CopyBuffer(destination, source, buffer)
 	if err != nil {
