@@ -12,7 +12,7 @@ const landingHTML = `<!doctype html>
   <link rel="stylesheet" href="/assets/app.css">
 </head>
 <body class="landing">
-  <header><div class="brand"><img class="mark" src="/favicon.svg" alt="" width="36" height="36">Dumpbox</div></header>
+  <header><div class="brand"><img class="mark" src="/favicon.svg" alt="" width="36" height="36">Dumpbox <span class="version">{{.Version}}</span></div></header>
   <main>
     <section class="card">
       <img class="logo" src="/assets/logo.svg" alt="Dumpbox">
@@ -21,7 +21,6 @@ const landingHTML = `<!doctype html>
       <a class="login" href="login">Sign in</a>
     </section>
   </main>
-  <footer>Dumpbox {{.Version}}</footer>
 </body>
 </html>`
 
@@ -37,7 +36,7 @@ const indexHTML = `<!doctype html>
 </head>
 <body class="application">
   <header>
-    <div class="brand"><img class="mark" src="/favicon.svg" alt="" width="36" height="36">Dumpbox</div>
+    <div class="brand"><img class="mark" src="/favicon.svg" alt="" width="36" height="36">Dumpbox <span class="version">{{.Version}}</span></div>
     <div class="user"><span>{{.Name}}</span><form action="logout" method="post"><button class="logout">Sign out</button></form></div>
   </header>
   <main>
@@ -51,6 +50,5 @@ const indexHTML = `<!doctype html>
     </label>
     <section class="queue" id="queue" aria-live="polite"></section>
   </main>
-  <footer>Dumpbox {{.Version}}</footer>
 </body>
 </html>`
