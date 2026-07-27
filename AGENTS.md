@@ -52,6 +52,7 @@ to operate.
 | `.github/workflows/ci.yml` | gofmt, `go vet`, `go test -race`, build, `bash -n` and shellcheck |
 | `.github/workflows/release.yml` | Tag-driven archives, checksums, GitHub release, GHCR image |
 | `docs/security-review/` | Dated security review reports |
+| `docs/grafana-dashboard.json` | Importable Grafana dashboard for Prometheus metrics |
 
 ## Request flow
 
