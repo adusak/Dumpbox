@@ -108,6 +108,11 @@ allowing operators to correlate usage without exporting usernames. The metrics
 endpoint is unauthenticated for Prometheus scraping; restrict the metrics port
 to the monitoring network because it exposes operational data.
 
+An example dashboard is available at [`docs/grafana-dashboard.json`](docs/grafana-dashboard.json).
+In Grafana, choose **Dashboards → New → Import**, upload the JSON file, and select
+the Prometheus datasource that scrapes Dumpbox. Use the dashboard's job and instance
+selectors when that datasource contains more than one Dumpbox target.
+
 ## Contributing
 
 [`AGENTS.md`](AGENTS.md) describes the project vision, goals and non-goals,
