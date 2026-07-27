@@ -47,7 +47,7 @@ jobs:
             build_dir="$(mktemp -d)"
             CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build \
               -trimpath \
-              -ldflags="-s -w" \
+              -ldflags="-s -w -X github.com/adusak/Dumpbox/internal/dumpbox.Version=${VERSION}" \
               -o "$build_dir/dumpbox" \
               ./cmd/dumpbox
             tar -C "$build_dir" -czf "dist/$archive" dumpbox
@@ -123,5 +123,6 @@ jobs:
           push: true
           provenance: mode=max
           sbom: true
+          build-args: VERSION=${{ github.ref_name }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

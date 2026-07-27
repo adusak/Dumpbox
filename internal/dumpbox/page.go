@@ -1,5 +1,7 @@
 package dumpbox
 
+var Version = "development"
+
 const landingHTML = `<!doctype html>
 <html lang="en">
 <head>
@@ -19,6 +21,7 @@ const landingHTML = `<!doctype html>
       <a class="login" href="login">Sign in</a>
     </section>
   </main>
+  <footer>Dumpbox {{.Version}}</footer>
 </body>
 </html>`
 
@@ -48,5 +51,6 @@ const indexHTML = `<!doctype html>
     </label>
     <section class="queue" id="queue" aria-live="polite"></section>
   </main>
+  <footer>Dumpbox {{.Version}}</footer>
 </body>
 </html>`

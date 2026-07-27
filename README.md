@@ -31,7 +31,8 @@ docker compose up -d
 The compose file runs the published multi-architecture image
 `ghcr.io/adusak/dumpbox:latest`. Set `DUMPBOX_VERSION` to pin a released tag,
 for example `DUMPBOX_VERSION=1.0.0`, or run `docker compose up -d --build` to
-build the image from this checkout instead. The service binds only to
+build the image from this checkout instead. Release builds display their tag in
+the footer; local builds display `development`. The service binds only to
 `127.0.0.1:8080`, uses a read-only root filesystem, drops all capabilities,
 enables `no-new-privileges`, and applies memory and process limits.
 
