@@ -76,7 +76,9 @@ The OIDC scopes are `openid profile email`. User folder names include a sanitize
 `preferred_username` followed by a hash of the immutable OIDC `sub` claim. If
 `preferred_username` is unavailable, only the hash is used. Files are written
 with `0600` permissions, user folders with `0700`, and duplicate filenames
-receive a numeric suffix instead of overwriting existing data.
+receive a numeric suffix instead of overwriting existing data. The upload queue keeps
+files in the order they were added and offers a retry action when an upload fails,
+including when the server's concurrency limit returns `429`.
 
 Dumpbox treats every identity that the configured OIDC client authenticates as
 authorized to upload. Restrict assignment to that client in the identity
