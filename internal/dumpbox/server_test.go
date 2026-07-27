@@ -50,6 +50,27 @@ func TestAuthenticatedUserSeesUploadPage(t *testing.T) {
 	}
 }
 
+func TestPagesUseVersionedApplicationAssets(t *testing.T) {
+	app := testServer(t)
+	for _, authenticated := range []bool{false, true} {
+		request := httptest.NewRequest(http.MethodGet, "https://dumpbox.example/", nil)
+		if authenticated {
+			request.AddCookie(&http.Cookie{Name: sessionCookie, Value: authenticatedCookie(t, app)})
+		}
+		response := httptest.NewRecorder()
+
+		app.Handler().ServeHTTP(response, request)
+
+		body := response.Body.String()
+		if !strings.Contains(body, `/assets/app.css?v=`+applicationAssetVersion) {
+			t.Errorf("authenticated = %t: page does not use versioned stylesheet: %s", authenticated, body)
+		}
+		if authenticated && !strings.Contains(body, `/assets/app.js?v=`+applicationAssetVersion) {
+			t.Errorf("authenticated page does not use versioned script: %s", body)
+		}
+	}
+}
+
 func TestPagesShowVersion(t *testing.T) {
 	app := testServer(t)
 	for _, authenticated := range []bool{false, true} {

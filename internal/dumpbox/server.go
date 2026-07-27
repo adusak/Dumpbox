@@ -53,8 +53,9 @@ type Server struct {
 type identityKey struct{}
 
 type pageData struct {
-	Name    string
-	Version string
+	Name         string
+	Version      string
+	AssetVersion string
 }
 
 func NewServer(config Config, provider *oidc.Provider, logger *slog.Logger) (*Server, error) {
@@ -233,7 +234,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.landingPage.Execute(w, pageData{Version: Version}); err != nil {
+	if err := s.landingPage.Execute(w, pageData{Version: Version, AssetVersion: applicationAssetVersion}); err != nil {
 		s.logger.Error("render landing page", "error", err)
 	}
 }
@@ -241,7 +242,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	user := r.Context().Value(identityKey{}).(session)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.page.Execute(w, pageData{Name: user.Name, Version: Version}); err != nil {
+	if err := s.page.Execute(w, pageData{Name: user.Name, Version: Version, AssetVersion: applicationAssetVersion}); err != nil {
 		s.logger.Error("render page", "error", err)
 	}
 }

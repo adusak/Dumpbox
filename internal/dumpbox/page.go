@@ -9,7 +9,7 @@ const landingHTML = `<!doctype html>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Dumpbox</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="stylesheet" href="/assets/app.css">
+  <link rel="stylesheet" href="/assets/app.css?v={{.AssetVersion}}">
 </head>
 <body class="landing">
   <header><div class="brand"><img class="mark" src="/favicon.svg" alt="" width="36" height="36">Dumpbox</div></header>
@@ -32,8 +32,8 @@ const indexHTML = `<!doctype html>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Dumpbox</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="stylesheet" href="/assets/app.css">
-  <script src="/assets/app.js" defer></script>
+  <link rel="stylesheet" href="/assets/app.css?v={{.AssetVersion}}">
+  <script src="/assets/app.js?v={{.AssetVersion}}" defer></script>
 </head>
 <body class="application">
   <header>
