@@ -50,6 +50,19 @@ func TestAuthenticatedUserSeesUploadPage(t *testing.T) {
 	}
 }
 
+func TestUploadPageOffersFolderDrops(t *testing.T) {
+	app := testServer(t)
+	request := httptest.NewRequest(http.MethodGet, "https://dumpbox.example/", nil)
+	request.AddCookie(&http.Cookie{Name: sessionCookie, Value: authenticatedCookie(t, app)})
+	response := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(response, request)
+
+	if body := response.Body.String(); !strings.Contains(body, "drag files and folders here") {
+		t.Fatalf("authenticated page does not offer folder drops: %s", body)
+	}
+}
+
 func TestPagesUseVersionedApplicationAssets(t *testing.T) {
 	app := testServer(t)
 	for _, authenticated := range []bool{false, true} {

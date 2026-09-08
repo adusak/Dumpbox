@@ -7,9 +7,41 @@ const queue = document.querySelector("#queue");
 ["dragleave", "drop"].forEach(name => drop.addEventListener(name, event => {
   event.preventDefault(); drop.classList.remove("dragging");
 }));
-drop.addEventListener("drop", event => uploadAll(event.dataTransfer.files));
+drop.addEventListener("drop", async event => uploadAll(await droppedFiles(event.dataTransfer)));
 picker.addEventListener("change", () => { uploadAll(picker.files); picker.value = ""; });
 function uploadAll(files) { Array.from(files).forEach(upload); }
+async function droppedFiles(dataTransfer) {
+  const entries = Array.from(dataTransfer.items || [])
+    .map(item => typeof item.webkitGetAsEntry === "function" ? item.webkitGetAsEntry() : null)
+    .filter(Boolean);
+  if (entries.length === 0) return dataTransfer.files;
+  return (await Promise.all(entries.map(filesFromEntry))).flat();
+}
+function filesFromEntry(entry) {
+  if (entry.isFile) {
+    return new Promise((resolve, reject) => entry.file(file => resolve([file]), reject));
+  }
+  if (!entry.isDirectory) return Promise.resolve([]);
+  const reader = entry.createReader();
+  const files = [];
+  return new Promise((resolve, reject) => {
+    function read() {
+      reader.readEntries(async entries => {
+        if (entries.length === 0) {
+          resolve(files);
+          return;
+        }
+        try {
+          files.push(...(await Promise.all(entries.map(filesFromEntry))).flat());
+          read();
+        } catch (error) {
+          reject(error);
+        }
+      }, reject);
+    }
+    read();
+  });
+}
 function upload(file) {
   const item = document.createElement("div");
   item.className = "file";

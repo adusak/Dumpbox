@@ -46,7 +46,7 @@ const indexHTML = `<!doctype html>
     <label class="drop" id="drop">
       <input type="file" id="picker" multiple>
       <div class="icon">↑</div>
-      <strong>Choose files or drag them here</strong>
+      <strong>Choose files or drag files and folders here</strong>
       <span>Uploads begin automatically</span>
     </label>
     <section class="queue" id="queue" aria-live="polite"></section>
