@@ -63,6 +63,38 @@ func TestUploadPageOffersFolderDrops(t *testing.T) {
 	}
 }
 
+func TestFilePickerRemainsDirectlyTappable(t *testing.T) {
+	data, err := brandAssets.ReadFile("assets/app.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stylesheet := string(data)
+	for _, declaration := range []string{"inset: 0", "opacity: 0", "width: 100%", "height: 100%"} {
+		if !strings.Contains(stylesheet, ".drop input {") || !strings.Contains(stylesheet, declaration) {
+			t.Fatalf("file picker is not overlaid on the drop area: %s", stylesheet)
+		}
+	}
+	if strings.Contains(stylesheet, "input { display: none; }") {
+		t.Fatal("file picker uses display: none, which prevents taps in some browsers")
+	}
+}
+
+func TestUploadScriptUsesCrossBrowserDropFallbacks(t *testing.T) {
+	data, err := brandAssets.ReadFile("assets/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(data)
+	for _, fallback := range []string{"item.getAsFile", "dataTransfer.files"} {
+		if !strings.Contains(script, fallback) {
+			t.Fatalf("upload script does not contain %q fallback", fallback)
+		}
+	}
+	if strings.Contains(script, ".flat(") {
+		t.Fatal("upload script uses Array.prototype.flat instead of its compatible fallback")
+	}
+}
+
 func TestPagesUseVersionedApplicationAssets(t *testing.T) {
 	app := testServer(t)
 	for _, authenticated := range []bool{false, true} {

@@ -14,21 +14,25 @@ drop.addEventListener("drop", async event => {
 picker.addEventListener("change", () => { uploadAll(picker.files); picker.value = ""; });
 function uploadAll(files) { Array.from(files).forEach(upload); }
 async function droppedEntries(dataTransfer) {
-  const entries = Array.from(dataTransfer.items || [])
-    .map(item => typeof item.webkitGetAsEntry === "function" ? item.webkitGetAsEntry() : null)
-    .filter(Boolean);
-  if (entries.length === 0) return Array.from(dataTransfer.files, file => ({ file }));
-  return Promise.all(entries.map(async entry => {
+  const items = Array.from(dataTransfer.items || []);
+  const dropped = await Promise.all(items.map(async item => {
+    const entry = typeof item.webkitGetAsEntry === "function" ? item.webkitGetAsEntry() : null;
+    if (!entry) {
+      const file = typeof item.getAsFile === "function" ? item.getAsFile() : null;
+      return file ? { file } : null;
+    }
     if (entry.isFile) {
       const files = await filesFromEntry(entry, "");
-      return { file: files[0].file };
+      return files.length > 0 ? { file: files[0].file } : null;
     }
     return { root: entry.name, files: await filesFromDirectory(entry) };
   }));
+  const usable = dropped.filter(Boolean);
+  return usable.length > 0 ? usable : Array.from(dataTransfer.files, file => ({ file }));
 }
 function filesFromDirectory(entry) {
   return readDirectory(entry).then(entries => Promise.all(entries.map(child => filesFromEntry(child, ""))))
-    .then(files => files.flat());
+    .then(groups => groups.reduce((files, group) => files.concat(group), []));
 }
 function filesFromEntry(entry, path) {
   if (entry.isFile) {
@@ -37,7 +41,7 @@ function filesFromEntry(entry, path) {
   if (!entry.isDirectory) return Promise.resolve([]);
   const childPath = path ? path + "/" + entry.name : entry.name;
   return readDirectory(entry).then(entries => Promise.all(entries.map(child => filesFromEntry(child, childPath))))
-    .then(files => files.flat());
+    .then(groups => groups.reduce((files, group) => files.concat(group), []));
 }
 function readDirectory(entry) {
   const reader = entry.createReader();
