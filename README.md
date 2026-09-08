@@ -86,7 +86,8 @@ filenames receive a numeric suffix instead of overwriting existing data. Dropped
 uploaded recursively with their directory structure preserved. A conflicting root
 folder receives a numeric suffix instead of being merged or overwritten. The upload
 queue keeps files in the order they were added and offers a retry action when an
-upload fails, including when the server's concurrency limit returns `429`.
+upload fails, including when the server's concurrency limit returns `429`. The file
+picker remains a native browser control so it also works on touch-only browsers.
 
 Dumpbox treats every identity that the configured OIDC client authenticates as
 authorized to upload. Restrict assignment to that client in the identity

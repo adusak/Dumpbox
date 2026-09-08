@@ -63,6 +63,22 @@ func TestUploadPageOffersFolderDrops(t *testing.T) {
 	}
 }
 
+func TestFilePickerRemainsDirectlyTappable(t *testing.T) {
+	data, err := brandAssets.ReadFile("assets/app.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stylesheet := string(data)
+	for _, declaration := range []string{"inset: 0", "opacity: 0", "width: 100%", "height: 100%"} {
+		if !strings.Contains(stylesheet, ".drop input {") || !strings.Contains(stylesheet, declaration) {
+			t.Fatalf("file picker is not overlaid on the drop area: %s", stylesheet)
+		}
+	}
+	if strings.Contains(stylesheet, "input { display: none; }") {
+		t.Fatal("file picker uses display: none, which prevents taps in some browsers")
+	}
+}
+
 func TestPagesUseVersionedApplicationAssets(t *testing.T) {
 	app := testServer(t)
 	for _, authenticated := range []bool{false, true} {
