@@ -7,46 +7,61 @@ const queue = document.querySelector("#queue");
 ["dragleave", "drop"].forEach(name => drop.addEventListener(name, event => {
   event.preventDefault(); drop.classList.remove("dragging");
 }));
-drop.addEventListener("drop", async event => uploadAll(await droppedFiles(event.dataTransfer)));
+drop.addEventListener("drop", async event => {
+  const entries = await droppedEntries(event.dataTransfer);
+  entries.forEach(entry => entry.root ? upload(entry.files, entry.root) : upload(entry.file));
+});
 picker.addEventListener("change", () => { uploadAll(picker.files); picker.value = ""; });
 function uploadAll(files) { Array.from(files).forEach(upload); }
-async function droppedFiles(dataTransfer) {
+async function droppedEntries(dataTransfer) {
   const entries = Array.from(dataTransfer.items || [])
     .map(item => typeof item.webkitGetAsEntry === "function" ? item.webkitGetAsEntry() : null)
     .filter(Boolean);
-  if (entries.length === 0) return dataTransfer.files;
-  return (await Promise.all(entries.map(filesFromEntry))).flat();
+  if (entries.length === 0) return Array.from(dataTransfer.files, file => ({ file }));
+  return Promise.all(entries.map(async entry => {
+    if (entry.isFile) {
+      const files = await filesFromEntry(entry, "");
+      return { file: files[0].file };
+    }
+    return { root: entry.name, files: await filesFromDirectory(entry) };
+  }));
 }
-function filesFromEntry(entry) {
+function filesFromDirectory(entry) {
+  return readDirectory(entry).then(entries => Promise.all(entries.map(child => filesFromEntry(child, ""))))
+    .then(files => files.flat());
+}
+function filesFromEntry(entry, path) {
   if (entry.isFile) {
-    return new Promise((resolve, reject) => entry.file(file => resolve([file]), reject));
+    return new Promise((resolve, reject) => entry.file(file => resolve([{ file, path }]), reject));
   }
   if (!entry.isDirectory) return Promise.resolve([]);
+  const childPath = path ? path + "/" + entry.name : entry.name;
+  return readDirectory(entry).then(entries => Promise.all(entries.map(child => filesFromEntry(child, childPath))))
+    .then(files => files.flat());
+}
+function readDirectory(entry) {
   const reader = entry.createReader();
-  const files = [];
+  const entries = [];
   return new Promise((resolve, reject) => {
     function read() {
-      reader.readEntries(async entries => {
-        if (entries.length === 0) {
-          resolve(files);
+      reader.readEntries(batch => {
+        if (batch.length === 0) {
+          resolve(entries);
           return;
         }
-        try {
-          files.push(...(await Promise.all(entries.map(filesFromEntry))).flat());
-          read();
-        } catch (error) {
-          reject(error);
-        }
+        entries.push(...batch);
+        read();
       }, reject);
     }
     read();
   });
 }
-function upload(file) {
+function upload(value, root = "") {
+  const files = root ? value : [{ file: value, path: "" }];
   const item = document.createElement("div");
   item.className = "file";
   const row = document.createElement("div"); row.className = "row";
-  const filename = document.createElement("div"); filename.className = "filename"; filename.textContent = file.name;
+  const filename = document.createElement("div"); filename.className = "filename"; filename.textContent = root || value.name;
   const result = document.createElement("div"); result.className = "result";
   const status = document.createElement("div"); status.className = "status";
   const retry = document.createElement("button"); retry.className = "retry"; retry.type = "button"; retry.textContent = "Retry"; retry.hidden = true;
@@ -59,7 +74,12 @@ function upload(file) {
   }
   function send() {
     item.classList.remove("done", "failed"); fill.style.width = "0"; status.textContent = "Starting…"; retry.hidden = true;
-    const body = new FormData(); body.append("file", file);
+    const body = new FormData();
+    if (root) body.append("root", root);
+    files.forEach(entry => {
+      if (root) body.append("path", entry.path);
+      body.append("file", entry.file);
+    });
     const request = new XMLHttpRequest(); request.open("POST", "upload"); request.setRequestHeader("X-Dumpbox-Upload", "1");
     request.upload.onprogress = event => {
       if (!event.lengthComputable) return;

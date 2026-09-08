@@ -294,6 +294,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var uploaded []string
+	var folderRoot, folderName, relativeDirectory string
 	for {
 		part, err := reader.NextPart()
 		if errors.Is(err, io.EOF) {
@@ -307,7 +308,34 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Could not read the upload."})
 			return
 		}
-		if part.FormName() != "file" || part.FileName() == "" {
+		if part.FileName() == "" {
+			value, readErr := io.ReadAll(io.LimitReader(part, 4097))
+			_ = part.Close()
+			if readErr != nil || len(value) > 4096 {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid folder path."})
+				return
+			}
+			switch part.FormName() {
+			case "root":
+				if len(uploaded) > 0 || folderRoot != "" {
+					writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid folder upload."})
+					return
+				}
+				folderRoot = safeFilename(string(value))
+				if folderRoot == "" {
+					writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid folder path."})
+					return
+				}
+			case "path":
+				if folderRoot == "" {
+					writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid folder path."})
+					return
+				}
+				relativeDirectory = string(value)
+			}
+			continue
+		}
+		if part.FormName() != "file" {
 			_ = part.Close()
 			continue
 		}
@@ -316,7 +344,26 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "Too many files in one upload."})
 			return
 		}
-		name, written, err := storePart(directory, part, s.limits.fileBytes, func() bool {
+		targetDirectory := directory
+		if folderRoot != "" {
+			if folderName == "" {
+				folderName, err = createUniqueDirectory(directory, folderRoot)
+				if err != nil {
+					_ = part.Close()
+					s.logger.Error("create upload folder", "subject", user.Subject, "error", err)
+					writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Could not store the folder."})
+					return
+				}
+			}
+			targetDirectory, err = createRelativeDirectory(filepath.Join(directory, folderName), relativeDirectory)
+			if err != nil {
+				_ = part.Close()
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid folder path."})
+				return
+			}
+			relativeDirectory = ""
+		}
+		name, written, err := storePart(targetDirectory, part, s.limits.fileBytes, func() bool {
 			return s.storageQuota.reserveFile(user.Subject)
 		}, func() {
 			s.storageQuota.releaseFile(user.Subject)
@@ -338,6 +385,14 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 			s.logger.Error("store upload", "subject", user.Subject, "error", err)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Could not store the file."})
 			return
+		}
+		if folderName != "" {
+			relative, relativeErr := filepath.Rel(directory, targetDirectory)
+			if relativeErr != nil {
+				s.internalError(w, r, fmt.Errorf("resolve uploaded path: %w", relativeErr))
+				return
+			}
+			name = filepath.Join(relative, name)
 		}
 		uploaded = append(uploaded, name)
 		s.metrics.recordFile(user, written)
@@ -461,6 +516,43 @@ func publishFile(directory, name, tempName string) (string, error) {
 		}
 	}
 	return "", errors.New("too many files with the same name")
+}
+
+func createUniqueDirectory(directory, name string) (string, error) {
+	name = safeFilename(name)
+	if name == "" {
+		return "", errors.New("invalid directory name")
+	}
+	for sequence := 0; sequence < 10_000; sequence++ {
+		candidate := name
+		if sequence > 0 {
+			candidate = fmt.Sprintf("%s (%d)", name, sequence)
+		}
+		if err := os.Mkdir(filepath.Join(directory, candidate), 0o700); err == nil {
+			return candidate, nil
+		} else if !errors.Is(err, os.ErrExist) {
+			return "", err
+		}
+	}
+	return "", errors.New("too many directories with the same name")
+}
+
+func createRelativeDirectory(root, relative string) (string, error) {
+	directory := root
+	if relative == "" {
+		return directory, nil
+	}
+	for _, segment := range strings.Split(strings.ReplaceAll(relative, "\\", "/"), "/") {
+		segment = safeFilename(segment)
+		if segment == "" {
+			return "", errors.New("invalid directory path")
+		}
+		directory = filepath.Join(directory, segment)
+	}
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		return "", err
+	}
+	return directory, nil
 }
 
 func safeFilename(name string) string {

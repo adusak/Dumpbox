@@ -263,6 +263,36 @@ func TestUploadDoesNotOverwriteExistingFile(t *testing.T) {
 	assertFileContent(t, filepath.Join(directory, "notes (1).txt"), "second")
 }
 
+func TestFolderUploadPreservesStructureAndUsesUniqueRoot(t *testing.T) {
+	app := testServer(t)
+	files := []folderFile{
+		{path: "", name: "README.txt", content: "root"},
+		{path: "docs/guides", name: "start.txt", content: "nested"},
+	}
+
+	first := uploadFolder(t, app, "project", files)
+	second := uploadFolder(t, app, "project", files)
+	if first.Code != http.StatusCreated || second.Code != http.StatusCreated {
+		t.Fatalf("statuses = %d, %d; bodies = %s, %s", first.Code, second.Code, first.Body.String(), second.Body.String())
+	}
+
+	directory := filepath.Join(app.dataDir, userDirectory(session{Subject: "subject-123", Username: "alice"}))
+	assertFileContent(t, filepath.Join(directory, "project", "README.txt"), "root")
+	assertFileContent(t, filepath.Join(directory, "project", "docs", "guides", "start.txt"), "nested")
+	assertFileContent(t, filepath.Join(directory, "project (1)", "docs", "guides", "start.txt"), "nested")
+}
+
+func TestFolderUploadRejectsUnsafeRelativePath(t *testing.T) {
+	app := testServer(t)
+	response := uploadFolder(t, app, "project", []folderFile{
+		{path: "../outside", name: "secret.txt", content: "no"},
+	})
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusBadRequest, response.Body.String())
+	}
+}
+
 func TestUploadRejectsCumulativeUserQuota(t *testing.T) {
 	app := testServer(t)
 	quota, err := newStorageQuota(app.dataDir, 10, defaultMaxFilesPerUser)
@@ -623,6 +653,45 @@ func upload(t testing.TB, app *Server, filename string, content []byte) *httptes
 	}
 	if _, err := part.Write(content); err != nil {
 		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "https://dumpbox.example/upload", &body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	request.Header.Set("Origin", "https://dumpbox.example")
+	request.Header.Set("X-Dumpbox-Upload", "1")
+	request.AddCookie(&http.Cookie{Name: sessionCookie, Value: authenticatedCookie(t, app)})
+	response := httptest.NewRecorder()
+	app.Handler().ServeHTTP(response, request)
+	return response
+}
+
+type folderFile struct {
+	path    string
+	name    string
+	content string
+}
+
+func uploadFolder(t testing.TB, app *Server, root string, files []folderFile) *httptest.ResponseRecorder {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if err := writer.WriteField("root", root); err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		if err := writer.WriteField("path", file.path); err != nil {
+			t.Fatal(err)
+		}
+		part, err := writer.CreateFormFile("file", file.name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := part.Write([]byte(file.content)); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
