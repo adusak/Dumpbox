@@ -528,6 +528,9 @@ func createUniqueDirectory(directory, name string) (string, error) {
 		if sequence > 0 {
 			candidate = fmt.Sprintf("%s (%d)", name, sequence)
 		}
+		if !filepath.IsLocal(candidate) {
+			return "", errors.New("invalid directory name")
+		}
 		if err := os.Mkdir(filepath.Join(directory, candidate), 0o700); err == nil {
 			return candidate, nil
 		} else if !errors.Is(err, os.ErrExist) {
@@ -538,17 +541,21 @@ func createUniqueDirectory(directory, name string) (string, error) {
 }
 
 func createRelativeDirectory(root, relative string) (string, error) {
-	directory := root
 	if relative == "" {
-		return directory, nil
+		return root, nil
 	}
+	var local string
 	for _, segment := range strings.Split(strings.ReplaceAll(relative, "\\", "/"), "/") {
 		segment = safeFilename(segment)
 		if segment == "" {
 			return "", errors.New("invalid directory path")
 		}
-		directory = filepath.Join(directory, segment)
+		local = filepath.Join(local, segment)
 	}
+	if !filepath.IsLocal(local) {
+		return "", errors.New("invalid directory path")
+	}
+	directory := filepath.Join(root, local)
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return "", err
 	}
