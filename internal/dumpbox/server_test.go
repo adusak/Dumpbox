@@ -203,8 +203,8 @@ func TestUploadStreamsToUserDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0o600 {
-		t.Fatalf("file permissions = %o, want 600", info.Mode().Perm())
+	if info.Mode().Perm() != 0o660 {
+		t.Fatalf("file permissions = %o, want 660", info.Mode().Perm())
 	}
 }
 
@@ -456,7 +456,7 @@ func TestStorePartCleansUpAfterPanic(t *testing.T) {
 				t.Fatal("storePart did not panic")
 			}
 		}()
-		_, _, _ = storePart(directory, part, defaultMaxFileBytes, nil, nil, nil, nil)
+		_, _, _ = storePart(directory, part, defaultMaxFileBytes, defaultFileMode, nil, nil, nil, nil)
 	}()
 
 	entries, err := os.ReadDir(directory)
@@ -611,8 +611,10 @@ func testServer(t *testing.T) *Server {
 		t.Fatal(err)
 	}
 	return &Server{
-		baseURL: baseURL,
-		dataDir: t.TempDir(),
+		baseURL:  baseURL,
+		dataDir:  t.TempDir(),
+		dirMode:  defaultDirMode,
+		fileMode: defaultFileMode,
 		limits: uploadLimits{
 			requestBytes:    defaultMaxRequestBytes,
 			fileBytes:       defaultMaxFileBytes,
@@ -852,6 +854,36 @@ func TestLoadConfigValidatesMaxFilesPerUser(t *testing.T) {
 	}
 	if config.MaxFilesPerUser != 123 {
 		t.Fatalf("MaxFilesPerUser = %d, want 123", config.MaxFilesPerUser)
+	}
+}
+
+func TestLoadConfigParsesDirAndFileMode(t *testing.T) {
+	t.Setenv("OIDC_ISSUER_URL", "https://identity.example")
+	t.Setenv("OIDC_CLIENT_ID", "dumpbox")
+	t.Setenv("OIDC_CLIENT_SECRET", "client-secret")
+	t.Setenv("SESSION_SECRET", base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32)))
+
+	config, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.DirMode != 0o770 || config.FileMode != 0o660 {
+		t.Fatalf("DirMode = %o, FileMode = %o, want 770, 660", config.DirMode, config.FileMode)
+	}
+
+	t.Setenv("DUMPBOX_DIR_MODE", "0750")
+	t.Setenv("DUMPBOX_FILE_MODE", "0640")
+	config, err = LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.DirMode != 0o750 || config.FileMode != 0o640 {
+		t.Fatalf("DirMode = %o, FileMode = %o, want 750, 640", config.DirMode, config.FileMode)
+	}
+
+	t.Setenv("DUMPBOX_DIR_MODE", "not-octal")
+	if _, err := LoadConfig(); err == nil || !strings.Contains(err.Error(), "DUMPBOX_DIR_MODE") {
+		t.Fatalf("LoadConfig() error = %v, want DUMPBOX_DIR_MODE validation error", err)
 	}
 }
 

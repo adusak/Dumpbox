@@ -19,6 +19,8 @@ const (
 	defaultMaxFilesPerUser    = 10_000
 	defaultUploadsPerSubject  = 4
 	defaultUploadsTotal       = 32
+	defaultDirMode            = os.FileMode(0o770)
+	defaultFileMode           = os.FileMode(0o660)
 )
 
 type Config struct {
@@ -37,6 +39,8 @@ type Config struct {
 	MaxFilesPerUser    int
 	MaxUploadsPerUser  int
 	MaxUploadsTotal    int
+	DirMode            os.FileMode
+	FileMode           os.FileMode
 }
 
 func LoadConfig() (Config, error) {
@@ -96,6 +100,12 @@ func LoadConfig() (Config, error) {
 	}
 	if config.MaxUploadsPerUser > config.MaxUploadsTotal {
 		return Config{}, errors.New("MAX_CONCURRENT_UPLOADS_PER_USER must not exceed MAX_CONCURRENT_UPLOADS")
+	}
+	if config.DirMode, err = envMode("DUMPBOX_DIR_MODE", defaultDirMode); err != nil {
+		return Config{}, err
+	}
+	if config.FileMode, err = envMode("DUMPBOX_FILE_MODE", defaultFileMode); err != nil {
+		return Config{}, err
 	}
 	return config, nil
 }
@@ -163,6 +173,18 @@ func envCount(name string, fallback int) (int, error) {
 		return 0, fmt.Errorf("%s must be a positive integer", name)
 	}
 	return value, nil
+}
+
+func envMode(name string, fallback os.FileMode) (os.FileMode, error) {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.ParseUint(raw, 8, 32)
+	if err != nil || value == 0 || value > 0o777 {
+		return 0, fmt.Errorf("%s must be an octal permission mode between 0001 and 0777", name)
+	}
+	return os.FileMode(value), nil
 }
 
 func env(name, fallback string) string {

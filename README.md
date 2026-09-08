@@ -65,6 +65,8 @@ application-level upload deadline so large legitimate uploads can stream.
 | `MAX_FILES_PER_USER` | no | `10000` | Cumulative files allowed per OIDC identity |
 | `MAX_CONCURRENT_UPLOADS_PER_USER` | no | `4` | Concurrent uploads allowed per user |
 | `MAX_CONCURRENT_UPLOADS` | no | `32` | Concurrent uploads allowed across all users |
+| `DUMPBOX_DIR_MODE` | no | `0770` | Octal permission mode for created user/folder directories |
+| `DUMPBOX_FILE_MODE` | no | `0660` | Octal permission mode for uploaded files |
 
 `OIDC_ISSUER_URL` must be an absolute `https` URL without userinfo, query, or
 fragment. Requests over the per-request limits are rejected with `413`, users
@@ -77,8 +79,10 @@ and to protect against aggregate use by many identities.
 The OIDC scopes are `openid profile email`. User folder names include a sanitized
 `preferred_username` followed by a hash of the immutable OIDC `sub` claim. If
 `preferred_username` is unavailable, only the hash is used. Files are written
-with `0600` permissions, user folders with `0700`, and duplicate filenames
-receive a numeric suffix instead of overwriting existing data. Dropped folders are
+with `0660` permissions and user folders with `0770` by default; set
+`DUMPBOX_DIR_MODE`/`DUMPBOX_FILE_MODE` to change this, for example to grant a
+shared group access to the upload directory from outside Dumpbox. Duplicate
+filenames receive a numeric suffix instead of overwriting existing data. Dropped folders are
 uploaded recursively with their directory structure preserved. A conflicting root
 folder receives a numeric suffix instead of being merged or overwritten. The upload
 queue keeps files in the order they were added and offers a retry action when an
