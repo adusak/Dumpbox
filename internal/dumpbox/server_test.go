@@ -79,6 +79,22 @@ func TestFilePickerRemainsDirectlyTappable(t *testing.T) {
 	}
 }
 
+func TestUploadScriptUsesCrossBrowserDropFallbacks(t *testing.T) {
+	data, err := brandAssets.ReadFile("assets/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(data)
+	for _, fallback := range []string{"item.getAsFile", "dataTransfer.files"} {
+		if !strings.Contains(script, fallback) {
+			t.Fatalf("upload script does not contain %q fallback", fallback)
+		}
+	}
+	if strings.Contains(script, ".flat(") {
+		t.Fatal("upload script uses Array.prototype.flat instead of its compatible fallback")
+	}
+}
+
 func TestPagesUseVersionedApplicationAssets(t *testing.T) {
 	app := testServer(t)
 	for _, authenticated := range []bool{false, true} {

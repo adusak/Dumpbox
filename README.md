@@ -88,6 +88,8 @@ folder receives a numeric suffix instead of being merged or overwritten. The upl
 queue keeps files in the order they were added and offers a retry action when an
 upload fails, including when the server's concurrency limit returns `429`. The file
 picker remains a native browser control so it also works on touch-only browsers.
+File selection and file drag-and-drop work in current Chromium-based browsers and
+Safari; recursive folder drops are used when the browser exposes directory entries.
 
 Dumpbox treats every identity that the configured OIDC client authenticates as
 authorized to upload. Restrict assignment to that client in the identity
