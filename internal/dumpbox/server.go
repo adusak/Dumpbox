@@ -36,6 +36,8 @@ type tokenVerifier interface {
 type Server struct {
 	baseURL      *url.URL
 	dataDir      string
+	dirMode      os.FileMode
+	fileMode     os.FileMode
 	limits       uploadLimits
 	uploadSlots  *uploadSlots
 	storageQuota *storageQuota
@@ -75,8 +77,10 @@ func NewServer(config Config, provider *oidc.Provider, logger *slog.Logger) (*Se
 		return nil, fmt.Errorf("calculate storage usage: %w", err)
 	}
 	return &Server{
-		baseURL: config.BaseURL,
-		dataDir: config.DataDir,
+		baseURL:  config.BaseURL,
+		dataDir:  config.DataDir,
+		dirMode:  config.DirMode,
+		fileMode: config.FileMode,
 		limits: uploadLimits{
 			requestBytes:    config.MaxRequestBytes,
 			fileBytes:       config.MaxFileBytes,
@@ -288,7 +292,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	directory := filepath.Join(s.dataDir, userDirectory(user))
-	if err := os.MkdirAll(directory, 0o700); err != nil {
+	if err := os.MkdirAll(directory, s.dirMode); err != nil {
 		s.internalError(w, r, fmt.Errorf("create user directory: %w", err))
 		return
 	}
@@ -347,7 +351,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		targetDirectory := directory
 		if folderRoot != "" {
 			if folderName == "" {
-				folderName, err = createUniqueDirectory(directory, folderRoot)
+				folderName, err = createUniqueDirectory(directory, folderRoot, s.dirMode)
 				if err != nil {
 					_ = part.Close()
 					s.logger.Error("create upload folder", "subject", user.Subject, "error", err)
@@ -355,7 +359,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			}
-			targetDirectory, err = createRelativeDirectory(filepath.Join(directory, folderName), relativeDirectory)
+			targetDirectory, err = createRelativeDirectory(filepath.Join(directory, folderName), relativeDirectory, s.dirMode)
 			if err != nil {
 				_ = part.Close()
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid folder path."})
@@ -363,7 +367,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 			}
 			relativeDirectory = ""
 		}
-		name, written, err := storePart(targetDirectory, part, s.limits.fileBytes, func() bool {
+		name, written, err := storePart(targetDirectory, part, s.limits.fileBytes, s.fileMode, func() bool {
 			return s.storageQuota.reserveFile(user.Subject)
 		}, func() {
 			s.storageQuota.releaseFile(user.Subject)
@@ -432,7 +436,7 @@ func isRequestTooLarge(err error) bool {
 	return errors.As(err, &maxBytes)
 }
 
-func storePart(directory string, part *multipart.Part, maxFileBytes int64, reserveFile func() bool, releaseFile func(), reserveBytes func(int64) bool, releaseBytes func(int64)) (name string, written int64, err error) {
+func storePart(directory string, part *multipart.Part, maxFileBytes int64, fileMode os.FileMode, reserveFile func() bool, releaseFile func(), reserveBytes func(int64) bool, releaseBytes func(int64)) (name string, written int64, err error) {
 	name = safeFilename(part.FileName())
 	if name == "" {
 		return "", 0, errors.New("invalid filename")
@@ -455,7 +459,7 @@ func storePart(directory string, part *multipart.Part, maxFileBytes int64, reser
 		_ = temp.Close()
 		_ = os.Remove(tempName)
 	}()
-	if err = temp.Chmod(0o600); err != nil {
+	if err = temp.Chmod(fileMode); err != nil {
 		return "", 0, err
 	}
 	var reserved int64
@@ -518,7 +522,7 @@ func publishFile(directory, name, tempName string) (string, error) {
 	return "", errors.New("too many files with the same name")
 }
 
-func createUniqueDirectory(directory, name string) (string, error) {
+func createUniqueDirectory(directory, name string, mode os.FileMode) (string, error) {
 	name = safeFilename(name)
 	if name == "" {
 		return "", errors.New("invalid directory name")
@@ -531,7 +535,7 @@ func createUniqueDirectory(directory, name string) (string, error) {
 		if !filepath.IsLocal(candidate) {
 			return "", errors.New("invalid directory name")
 		}
-		if err := os.Mkdir(filepath.Join(directory, candidate), 0o700); err == nil {
+		if err := os.Mkdir(filepath.Join(directory, candidate), mode); err == nil {
 			return candidate, nil
 		} else if !errors.Is(err, os.ErrExist) {
 			return "", err
@@ -540,7 +544,7 @@ func createUniqueDirectory(directory, name string) (string, error) {
 	return "", errors.New("too many directories with the same name")
 }
 
-func createRelativeDirectory(root, relative string) (string, error) {
+func createRelativeDirectory(root, relative string, mode os.FileMode) (string, error) {
 	if relative == "" {
 		return root, nil
 	}
@@ -556,7 +560,7 @@ func createRelativeDirectory(root, relative string) (string, error) {
 		return "", errors.New("invalid directory path")
 	}
 	directory := filepath.Join(root, local)
-	if err := os.MkdirAll(directory, 0o700); err != nil {
+	if err := os.MkdirAll(directory, mode); err != nil {
 		return "", err
 	}
 	return directory, nil
