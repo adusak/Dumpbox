@@ -1,5 +1,6 @@
 const drop = document.querySelector("#drop");
 const picker = document.querySelector("#picker");
+const folderPicker = document.querySelector("#folder-picker");
 const queue = document.querySelector("#queue");
 ["dragenter", "dragover"].forEach(name => drop.addEventListener(name, event => {
   event.preventDefault(); drop.classList.add("dragging");
@@ -8,15 +9,53 @@ const queue = document.querySelector("#queue");
   event.preventDefault(); drop.classList.remove("dragging");
 }));
 drop.addEventListener("drop", async event => {
-  const entries = await droppedEntries(event.dataTransfer);
-  entries.forEach(entry => entry.root ? upload(entry.files, entry.root) : upload(entry.file));
+  try {
+    const entries = await droppedEntries(event.dataTransfer);
+    if (entries.length === 0) {
+      reportDropError();
+      return;
+    }
+    uploadEntries(entries);
+  } catch (_) {
+    reportDropError();
+  }
 });
 picker.addEventListener("change", () => { uploadAll(picker.files); picker.value = ""; });
+folderPicker.addEventListener("change", () => {
+  uploadEntries(entriesFromFiles(folderPicker.files));
+  folderPicker.value = "";
+});
 function uploadAll(files) { Array.from(files).forEach(upload); }
+function uploadEntries(entries) {
+  entries.forEach(entry => entry.root ? upload(entry.files, entry.root) : upload(entry.file));
+}
+function entriesFromFiles(files) {
+  const entries = [];
+  const folders = new Map();
+  Array.from(files || []).forEach(file => {
+    const parts = (file.webkitRelativePath || "").split("/").filter(Boolean);
+    if (parts.length < 2) {
+      entries.push({ file });
+      return;
+    }
+    const root = parts.shift();
+    parts.pop();
+    let folder = folders.get(root);
+    if (!folder) {
+      folder = { root, files: [] };
+      folders.set(root, folder);
+      entries.push(folder);
+    }
+    folder.files.push({ file, path: parts.join("/") });
+  });
+  return entries;
+}
 async function droppedEntries(dataTransfer) {
   const items = Array.from(dataTransfer.items || []);
+  const transferred = entriesFromFiles(dataTransfer.files);
   const dropped = await Promise.all(items.map(async item => {
-    const entry = typeof item.webkitGetAsEntry === "function" ? item.webkitGetAsEntry() : null;
+    const getEntry = typeof item.getAsEntry === "function" ? item.getAsEntry : item.webkitGetAsEntry;
+    const entry = typeof getEntry === "function" ? getEntry.call(item) : null;
     if (!entry) {
       const file = typeof item.getAsFile === "function" ? item.getAsFile() : null;
       return file ? { file } : null;
@@ -28,7 +67,7 @@ async function droppedEntries(dataTransfer) {
     return { root: entry.name, files: await filesFromDirectory(entry) };
   }));
   const usable = dropped.filter(Boolean);
-  return usable.length > 0 ? usable : Array.from(dataTransfer.files, file => ({ file }));
+  return transferred.some(entry => entry.root) ? transferred : (usable.length > 0 ? usable : transferred);
 }
 function filesFromDirectory(entry) {
   return readDirectory(entry).then(entries => Promise.all(entries.map(child => filesFromEntry(child, ""))))
@@ -59,6 +98,15 @@ function readDirectory(entry) {
     }
     read();
   });
+}
+function reportDropError() {
+  const item = document.createElement("div");
+  item.className = "file failed";
+  const status = document.createElement("div");
+  status.className = "status";
+  status.textContent = "This browser could not read that folder. Use Choose folder instead.";
+  item.append(status);
+  queue.append(item);
 }
 function upload(value, root = "") {
   const files = root ? value : [{ file: value, path: "" }];
