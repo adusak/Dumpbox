@@ -86,10 +86,11 @@ filenames receive a numeric suffix instead of overwriting existing data. Dropped
 uploaded recursively with their directory structure preserved. A conflicting root
 folder receives a numeric suffix instead of being merged or overwritten. The upload
 queue keeps files in the order they were added and offers a retry action when an
-upload fails, including when the server's concurrency limit returns `429`. The file
-picker remains a native browser control so it also works on touch-only browsers.
-File selection and file drag-and-drop work in current Chromium-based browsers and
-Safari; recursive folder drops are used when the browser exposes directory entries.
+upload fails, including when the server's concurrency limit returns `429`. Separate
+native controls select files or a folder, so recursive folder uploads also work on
+current Firefox and Safari, including touch-only Safari. File and folder drag-and-drop
+is used when the browser and operating system expose directory entries; if they do
+not, use **Choose folder** instead.
 
 Dumpbox treats every identity that the configured OIDC client authenticates as
 authorized to upload. Restrict assignment to that client in the identity

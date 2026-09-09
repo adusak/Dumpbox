@@ -43,12 +43,21 @@ const indexHTML = `<!doctype html>
   <main>
     <h1>Drop it here.</h1>
     <p class="lead">Send files directly to this server. Uploads are authenticated and stream straight to their destination.</p>
-    <label class="drop" id="drop">
-      <input type="file" id="picker" multiple>
+    <div class="drop" id="drop">
       <div class="icon">↑</div>
-      <strong>Choose files or drag files and folders here</strong>
+      <strong>Drag files and folders here</strong>
+      <div class="pickers">
+        <label class="picker-control">
+          <input type="file" id="picker" multiple>
+          <span>Choose files</span>
+        </label>
+        <label class="picker-control">
+          <input type="file" id="folder-picker" webkitdirectory multiple>
+          <span>Choose folder</span>
+        </label>
+      </div>
       <span>Uploads begin automatically</span>
-    </label>
+    </div>
     <section class="queue" id="queue" aria-live="polite"></section>
   </main>
   <footer>Dumpbox {{.Version}}</footer>

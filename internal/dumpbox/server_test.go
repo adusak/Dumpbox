@@ -50,7 +50,7 @@ func TestAuthenticatedUserSeesUploadPage(t *testing.T) {
 	}
 }
 
-func TestUploadPageOffersFolderDrops(t *testing.T) {
+func TestUploadPageOffersFileAndFolderPickers(t *testing.T) {
 	app := testServer(t)
 	request := httptest.NewRequest(http.MethodGet, "https://dumpbox.example/", nil)
 	request.AddCookie(&http.Cookie{Name: sessionCookie, Value: authenticatedCookie(t, app)})
@@ -58,20 +58,28 @@ func TestUploadPageOffersFolderDrops(t *testing.T) {
 
 	app.Handler().ServeHTTP(response, request)
 
-	if body := response.Body.String(); !strings.Contains(body, "drag files and folders here") {
-		t.Fatalf("authenticated page does not offer folder drops: %s", body)
+	body := response.Body.String()
+	for _, control := range []string{
+		`id="picker" multiple`,
+		`id="folder-picker" webkitdirectory multiple`,
+		"Drag files and folders here",
+		"Choose folder",
+	} {
+		if !strings.Contains(body, control) {
+			t.Fatalf("authenticated page does not contain %q: %s", control, body)
+		}
 	}
 }
 
-func TestFilePickerRemainsDirectlyTappable(t *testing.T) {
+func TestFileAndFolderPickersRemainDirectlyTappable(t *testing.T) {
 	data, err := brandAssets.ReadFile("assets/app.css")
 	if err != nil {
 		t.Fatal(err)
 	}
 	stylesheet := string(data)
 	for _, declaration := range []string{"inset: 0", "opacity: 0", "width: 100%", "height: 100%"} {
-		if !strings.Contains(stylesheet, ".drop input {") || !strings.Contains(stylesheet, declaration) {
-			t.Fatalf("file picker is not overlaid on the drop area: %s", stylesheet)
+		if !strings.Contains(stylesheet, ".picker-control input {") || !strings.Contains(stylesheet, declaration) {
+			t.Fatalf("native pickers are not overlaid on their visible controls: %s", stylesheet)
 		}
 	}
 	if strings.Contains(stylesheet, "input { display: none; }") {
@@ -85,7 +93,14 @@ func TestUploadScriptUsesCrossBrowserDropFallbacks(t *testing.T) {
 		t.Fatal(err)
 	}
 	script := string(data)
-	for _, fallback := range []string{"item.getAsFile", "dataTransfer.files"} {
+	for _, fallback := range []string{
+		"item.getAsEntry",
+		"item.webkitGetAsEntry",
+		"item.getAsFile",
+		"dataTransfer.files",
+		"file.webkitRelativePath",
+		`folderPicker.addEventListener("change"`,
+	} {
 		if !strings.Contains(script, fallback) {
 			t.Fatalf("upload script does not contain %q fallback", fallback)
 		}
